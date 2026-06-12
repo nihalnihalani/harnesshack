@@ -3,7 +3,7 @@
 > Handoff memory between loop firings. Cold readers: read CLAUDE.md first for project law.
 > Loop: cron job `459218a5`, every 20 min. Started 2026-06-12.
 
-**Current phase: 2 (blocked on B2 ClickHouse) — Phase 2/3 code pre-authored; firing 4 pre-authors Phase 3 agent core + sponsor clients + Phase 4 choke-point + Phase 8 resilience. All gates still credential-blocked.**
+**Current phase: 2 (blocked on B2 ClickHouse). CODE-COMPLETE THROUGH PHASE 4 + resilience layer (verified firing 5: 171 tests, ruff clean, CI green). Every remaining step is paste-key-then-run-gate. All 9 blockers still open at firing 5; next escalation at firing 6.**
 
 ## Phase checklist
 
@@ -92,7 +92,18 @@ is open; idempotency keys register at receipt (durable dedupe → Phase 2).
 
 ## Blocker age (escalation counter — louder message at 3 consecutive firings)
 
-All B1–B9: opened firing 1; still open at firing 4 (2026-06-13). Escalation sent at firing 3; next at firing 6 if unchanged.
+All B1–B9: opened firing 1; still open at firing 5 (2026-06-13). Escalation sent at firing 3; NEXT FIRING (6) ESCALATES AGAIN if .env unchanged.
+
+## Pre-authored: Phase 3/4/8 core — COMPLETE (firing 4-5, commits c68ec7a..f8c1c46; verified 171 passed / 1 live-deselected, ruff clean, CI 27436254446 success)
+
+- libs/resilience.py: with_retries (exp backoff) + per-service circuit breaker (half-open probe) -> typed DegradedError; NotConfiguredError passes through, never trips breaker
+- libs/pioneer/: GLiNER2 extract_severity (measured latency_ms returned — UI badge source) + GLiGuard screen (moderation ONLY; ambiguous verdict is never a pass). B4-gated
+- libs/senso/retrieve.py: get_runbook/get_ownership -> CitedDocument; UncitedResponseError on uncited content. B6-gated
+- libs/guild/session.py: REST-first create/append/close + descope.md. B1-gated
+- apps/worker/agent.py: full IncidentAgent — GLiNER2-first pipeline, dual-sink event log (ClickHouse+Guild, one-sink fail -> DEGRADED event, both -> EventLogFatalError), open B5 surfaces as visible SKIPPED_NOT_CONFIGURED event, all events to SSE EventBus
+- libs/composio_actions/send.py: single _screened_send choke point (GuardrailBypassError without real ScreenResult; BLOCKED_BY_GUARDRAIL event on refusal; idempotency per incident+state+action; link() only; exact "Suggested owner — awaiting confirmation" wording). B7-gated
+- API shapes flagged tolerant-but-loud, confirm on-site when keys land: Pioneer response fields (B4), Senso POST /search (B6), Guild session endpoints (B1), Composio execute shapes (B7)
+- Ready-to-run verification commands per blocker are in the firing-5 agent report (also reproduced in commit messages)
 
 ## Pre-authored awaiting credentials — COMPLETE (2026-06-12, commits 1fcf8bb..7ea1c50; verified 75 passed / 1 live-deselected, ruff clean)
 
