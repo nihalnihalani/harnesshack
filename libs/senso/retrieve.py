@@ -19,8 +19,10 @@ cannot resolve. Confirm /search request+response shapes the moment B6 lands.
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 import os
+import time
 from dataclasses import dataclass
 from typing import Any
 
@@ -55,11 +57,19 @@ class NoDocumentFoundError(LookupError):
 
 @dataclass(frozen=True)
 class CitedDocument:
-    """A retrieved document that carries its provenance."""
+    """A retrieved document that carries its provenance.
+
+    `latency_ms` is the MEASURED wall-clock of the live HTTP retrieval that
+    produced this document (claim integrity: it feeds the UI latency badge).
+    It is None for documents parsed outside a live call (e.g. in unit tests
+    of the parser) — the badge then says "awaiting measurement", never a
+    made-up number.
+    """
 
     content: str
     citation: str
     source_id: str
+    latency_ms: float | None = None
 
 
 def _api_key() -> str:
@@ -146,7 +156,8 @@ def _search(query: str, span_name: str) -> CitedDocument:
     key = _api_key()
     request_body = build_search_request(query)
 
-    def _call() -> Any:
+    def _call() -> tuple[Any, float]:
+        start = time.perf_counter()
         response = httpx.post(
             base_url() + SEARCH_PATH,
             json=request_body,
@@ -154,10 +165,11 @@ def _search(query: str, span_name: str) -> CitedDocument:
             timeout=_TIMEOUT_SECONDS,
         )
         response.raise_for_status()
-        return response.json()
+        latency_ms = (time.perf_counter() - start) * 1000.0  # MEASURED
+        return response.json(), latency_ms
 
-    data = call_traced(span_name, _call, logger=logger)
-    return parse_search_response(data)
+    data, latency_ms = call_traced(span_name, _call, logger=logger)
+    return dataclasses.replace(parse_search_response(data), latency_ms=latency_ms)
 
 
 def get_runbook(symptom_query: str) -> CitedDocument:
@@ -179,6 +191,17 @@ def get_ownership(service: str) -> CitedDocument:
     return _search(f"service ownership map: {service}", "senso.get_ownership")
 
 
+def get_precedents(symptom_query: str) -> CitedDocument:
+    """Retrieve the best-matching PAST POSTMORTEM for a symptom — cited or refused.
+
+    Feeds Phase 6 postmortem generation: precedents may only be cited, never
+    paraphrased as fact about the CURRENT incident. Same hard rules as every
+    other retrieval: NotConfiguredError (B6) keyless, UncitedResponseError on
+    uncited content, NoDocumentFoundError on an honest empty result.
+    """
+    return _search(f"past incident postmortem: {symptom_query}", "senso.get_precedents")
+
+
 __all__ = [
     "DEFAULT_BASE_URL",
     "SEARCH_PATH",
@@ -188,6 +211,7 @@ __all__ = [
     "base_url",
     "build_search_request",
     "get_ownership",
+    "get_precedents",
     "get_runbook",
     "parse_search_response",
 ]

@@ -16,6 +16,7 @@ from libs.senso.retrieve import (
     base_url,
     build_search_request,
     get_ownership,
+    get_precedents,
     get_runbook,
     parse_search_response,
 )
@@ -29,6 +30,10 @@ class TestKeyless:
     def test_get_ownership_raises_b6(self):
         with pytest.raises(NotConfiguredError, match="B6"):
             get_ownership("payments-service")
+
+    def test_get_precedents_raises_b6(self):
+        with pytest.raises(NotConfiguredError, match="B6"):
+            get_precedents("payments p99 breach pool exhaustion")
 
 
 class TestRequestShape:
@@ -88,3 +93,11 @@ class TestCitationHardRule:
     def test_result_without_content_fails_loudly(self):
         with pytest.raises(UnexpectedResponseShapeError):
             parse_search_response({"results": [{"title": "t", "id": "x"}]})
+
+
+class TestLatencyClaimIntegrity:
+    def test_parser_alone_never_invents_a_latency(self):
+        # latency_ms is the MEASURED wall clock of a live call; the pure
+        # parser has no measurement, so it must be None — never a number.
+        doc = parse_search_response({"results": [{"text": "body", "id": "c1"}]})
+        assert doc.latency_ms is None
