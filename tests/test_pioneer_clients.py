@@ -87,13 +87,16 @@ class TestGliner2Parse:
 
 
 class TestGliguardRequestShape:
-    def test_model_is_gliguard_not_gliner2(self):
+    def test_live_contract_shape(self):
+        # Pinned to the contract confirmed live 2026-06-12 (keycheck team):
+        # the old {"model","input"} shape 422s on the real API.
         body = gliguard.build_screen_request("update text")
-        assert body["model"] == "gliguard"
-        assert body["input"] == "update text"
-        # Role separation (Learned Rules): the moderation request carries NO
-        # extraction schema.
-        assert "schema" not in body
+        assert body["model_id"] == "fastino/gliguard-LLMGuardrails-300M"
+        assert body["text"] == "update text"
+        assert body["schema"] == {"classifications": {"prompt_safety": ["safe", "unsafe"]}}
+        # Role separation (Learned Rules): a moderation request carries NO
+        # entity-extraction ask.
+        assert "entities" not in body["schema"]
 
 
 class TestGliguardKeyless:
@@ -102,32 +105,46 @@ class TestGliguardKeyless:
             gliguard.screen("outbound text")
 
 
+# Captured live response (2026-06-12, HTTP 200, server latency 392ms) —
+# trimmed to the fields the parser is allowed to rely on.
+_LIVE_SAFE_RESPONSE = {
+    "type": "encoder",
+    "inference_id": "4ca3b6fb-bd0b-472e-a475-c98ee2f71e10",
+    "result": {
+        "request_id": None,
+        "created_at": 1781305288,
+        "data": {"prompt_safety": {"label": "safe", "confidence": 0.9998956918716431}},
+    },
+    "model_id": "fastino/gliguard-LLMGuardrails-300M",
+    "latency_ms": 392.31109619140625,
+    "token_usage": 72,
+    "model_used": "fastino/gliguard-LLMGuardrails-300M",
+}
+
+
 class TestGliguardParse:
-    def test_allowed_true(self):
-        assert gliguard.parse_screen_response({"allowed": True}) == (True, ())
+    def test_live_safe_response(self):
+        allowed, categories, confidence = gliguard.parse_screen_response(_LIVE_SAFE_RESPONSE)
+        assert allowed is True
+        assert categories == ()
+        assert confidence == pytest.approx(0.9999, abs=1e-3)
 
-    def test_safe_key(self):
-        assert gliguard.parse_screen_response({"safe": False, "categories": ["harm"]}) == (
-            False,
-            ("harm",),
-        )
+    def test_unsafe_label_blocks_with_category(self):
+        data = {"result": {"data": {"prompt_safety": {"label": "unsafe", "confidence": 0.91}}}}
+        allowed, categories, confidence = gliguard.parse_screen_response(data)
+        assert allowed is False
+        assert categories == ("prompt_safety",)
+        assert confidence == pytest.approx(0.91)
 
-    def test_flagged_is_inverted(self):
-        assert gliguard.parse_screen_response({"flagged": True}) == (False, ())
-        assert gliguard.parse_screen_response({"flagged": False}) == (True, ())
-
-    def test_nested_container(self):
-        data = {"output": {"allowed": False, "violations": ["jailbreak"]}}
-        assert gliguard.parse_screen_response(data) == (False, ("jailbreak",))
-
-    def test_category_dict_shape(self):
-        data = {"allowed": False, "categories": {"harm": True, "jailbreak": False}}
-        assert gliguard.parse_screen_response(data) == (False, ("harm",))
-
-    def test_no_verdict_fails_loudly_never_default_allow(self):
+    def test_missing_task_fails_loudly_never_default_allow(self):
         with pytest.raises(UnexpectedResponseShapeError):
-            gliguard.parse_screen_response({"categories": ["harm"]})
+            gliguard.parse_screen_response({"result": {"data": {"something": "else"}}})
 
-    def test_non_boolean_verdict_fails_loudly(self):
+    def test_unknown_label_fails_loudly(self):
+        data = {"result": {"data": {"prompt_safety": {"label": "maybe"}}}}
         with pytest.raises(UnexpectedResponseShapeError):
-            gliguard.parse_screen_response({"allowed": "yes"})
+            gliguard.parse_screen_response(data)
+
+    def test_non_dict_fails_loudly(self):
+        with pytest.raises(UnexpectedResponseShapeError):
+            gliguard.parse_screen_response("not a dict")
