@@ -21,6 +21,7 @@ from apps.worker.agent import (
     TypedEvent,
     airbyte_context_lookup,
     first_runbook_step,
+    primary_owner_from_ownership_doc,
 )
 from libs.errors import NotConfiguredError
 from libs.resilience import reset_breakers
@@ -268,6 +269,46 @@ class TestClaimIntegrityPayloads:
         assert runbook.payload["citation"] == RUNBOOK_DOC.citation
         assert runbook.payload["source_id"] == RUNBOOK_DOC.source_id
 
+    def test_senso_latency_is_never_invented(self):
+        # The test docs carry no measured latency -> the payload must say
+        # None (UI: "awaiting measurement"), never substitute a number.
+        agent, ch, _, _ = build_agent()
+        agent.ingest_alert(ALERT)
+        runbook = next(e for e in ch if e.event_type == "runbook.retrieved")
+        assert runbook.payload["latency_ms"] is None
+
+    def test_causal_event_ships_the_real_sql(self):
+        from libs.clickhouse.causal import build_causal_sql
+
+        agent, ch, _, _ = build_agent()
+        agent.ingest_alert(ALERT)
+        causal = next(e for e in ch if e.event_type == "causal.chains_detected")
+        # The UI popover renders this verbatim — it must BE the executed SQL.
+        assert causal.payload["sql"] == build_causal_sql()
+        assert "lagInFrame" in causal.payload["sql"]
+
+    def test_ownership_event_carries_parsed_owner_from_cited_doc(self):
+        agent, ch, _, _ = build_agent()
+        agent.ingest_alert(ALERT)
+        ownership = next(e for e in ch if e.event_type == "ownership.suggested")
+        assert ownership.payload["suggested_owner"] == "dana-chen"
+
+
+class TestOwnerConfirmation:
+    def test_confirm_owner_emits_typed_event_to_both_sinks(self):
+        agent, ch, guild, published = build_agent()
+        agent.ingest_alert(ALERT)
+        event = agent.confirm_owner("dana-chen", confirmed_by="presenter")
+        assert event.event_type == "owner_confirmed"
+        assert event.payload == {"owner": "dana-chen", "confirmed_by": "presenter"}
+        for sink in (ch, guild, published):
+            assert sink[-1].event_type == "owner_confirmed"
+
+    def test_confirm_owner_before_ingest_is_illegal(self):
+        agent, _, _, _ = build_agent()
+        with pytest.raises(IllegalTransitionError):
+            agent.confirm_owner("dana-chen")
+
 
 class TestModuleHelpers:
     def test_airbyte_context_lookup_raises_b5_until_phase_5(self):
@@ -281,3 +322,14 @@ class TestModuleHelpers:
 
     def test_first_runbook_step_returns_none_when_absent(self):
         assert first_runbook_step("no numbered steps here") is None
+
+    def test_primary_owner_parses_seeded_section_format(self):
+        content = (
+            "## payments-service\n- Primary owner: dana-chen (payments platform team)\n"
+            "## payments-db-primary\n- Primary owner: alex-kim (database reliability team)\n"
+        )
+        assert primary_owner_from_ownership_doc(content, "payments-service") == "dana-chen"
+        assert primary_owner_from_ownership_doc(content, "payments-db-primary") == "alex-kim"
+
+    def test_primary_owner_returns_none_when_absent(self):
+        assert primary_owner_from_ownership_doc("no owners documented here", "payments") is None

@@ -206,6 +206,24 @@ def first_runbook_step(content: str) -> str | None:
     return match.group("step").strip() if match else None
 
 
+def primary_owner_from_ownership_doc(content: str, service: str) -> str | None:
+    """Extract '- Primary owner: <name>' for `service` from a CITED ownership doc.
+
+    Pure parse of the retrieved document (seed_senso.py ownership-map format:
+    a '## <service>' section containing 'Primary owner: <name>'). Returns
+    None honestly when the section or owner line is absent — the UI then
+    shows the citation without a name; a name is never invented.
+    """
+    section_match = re.search(
+        rf"^##\s*{re.escape(service)}\s*$(?P<body>.*?)(?=^##\s|\Z)",
+        content,
+        re.MULTILINE | re.DOTALL,
+    )
+    body = section_match.group("body") if section_match else content
+    owner_match = re.search(r"Primary owner:\s*(?P<owner>[\w.@-]+)", body)
+    return owner_match.group("owner") if owner_match else None
+
+
 # ---------------------------------------------------------------------------
 # IncidentAgent
 # ---------------------------------------------------------------------------
@@ -358,11 +376,15 @@ class IncidentAgent:
                 },
             )
 
-        # (b) ClickHouse causal LAG/LEAD query.
+        # (b) ClickHouse causal LAG/LEAD query. The payload ships the REAL SQL
+        # string the query runs (libs/clickhouse/causal.py) so the UI popover
+        # shows judges actual SQL, never a paraphrase.
         edges, ok = self._degradable(
             "causal_query", self._run_causal_query, service="clickhouse-causal"
         )
         if ok:
+            from libs.clickhouse.causal import build_causal_sql
+
             self._emit(
                 "causal.chains_detected",
                 {
@@ -373,7 +395,8 @@ class IncidentAgent:
                             "lag_seconds": edge.lag_seconds,
                         }
                         for edge in edges
-                    ]
+                    ],
+                    "sql": build_causal_sql(),
                 },
             )
 
@@ -394,6 +417,9 @@ class IncidentAgent:
                     "citation": runbook.citation,
                     "source_id": runbook.source_id,
                     "query": symptom_query,
+                    # MEASURED retrieval latency (None until measured — the UI
+                    # badge shows "awaiting measurement", never a made-up number).
+                    "latency_ms": getattr(runbook, "latency_ms", None),
                 },
             )
         ownership, _ = self._degradable(
@@ -408,6 +434,11 @@ class IncidentAgent:
                     "service": primary_service,
                     "citation": ownership.citation,
                     "source_id": ownership.source_id,
+                    # Parsed from the CITED doc; None (honest) when unparseable.
+                    "suggested_owner": primary_owner_from_ownership_doc(
+                        ownership.content, primary_service
+                    ),
+                    "latency_ms": getattr(ownership, "latency_ms", None),
                 },
             )
 
@@ -448,6 +479,20 @@ class IncidentAgent:
         )
         self._transition(IncidentState.MITIGATING, {"trigger": "runbook.step_selected"})
         return self.state
+
+    def confirm_owner(self, owner: str, confirmed_by: str = "human") -> TypedEvent:
+        """A HUMAN confirms the suggested owner -> typed owner_confirmed event.
+
+        This is the confirmation half of the claim-integrity rule: the agent
+        only ever SUGGESTS ('Suggested owner — awaiting confirmation'); the
+        confirmation is a human action and is logged as such.
+        """
+        if self.state is None:
+            raise IllegalTransitionError("incident has not been opened (call ingest_alert)")
+        return self._emit(
+            "owner_confirmed",
+            {"owner": owner, "confirmed_by": confirmed_by},
+        )
 
     def resolve(self, resolved_by: str = "human") -> IncidentState:
         """Human clicks Resolve -> RESOLVED; closes the Guild session."""
