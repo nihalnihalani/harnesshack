@@ -1,0 +1,67 @@
+# BUILD-STATE — IncidentSherpa production build ledger
+
+> Handoff memory between loop firings. Cold readers: read CLAUDE.md first for project law.
+> Loop: cron job `459218a5`, every 20 min. Started 2026-06-12.
+
+**Current phase: 0 (blocked on credentials) → Phase 1 scaffold in progress under the never-idle guardrail.**
+
+## Phase checklist
+
+| Phase | Status | Gate evidence |
+|---|---|---|
+| 0 — Preflight & credential gates | **PARTIAL — all 9 services blocked on human signup** (see BLOCKERS); credential-free probes done | Guild SDK probe + runtime checks below |
+| 1 — Scaffold + CI | IN PROGRESS (credential-free, allowed while P0 blocked) | — |
+| 2 — ClickHouse schema + live ingestion | not started (needs CLICKHOUSE_*) | — |
+| 3 — Agent core | not started (needs GUILD_PAT, PIONEER_API_KEY, SENSO_API_KEY, ANTHROPIC_API_KEY) | — |
+| 4 — Live actions | not started (needs COMPOSIO_API_KEY + Slack/Jira OAuth) | — |
+| 5 — Airbyte data layer | not started (needs AIRBYTE_CLIENT_ID/SECRET) | — |
+| 6 — Postmortem + frontend | not started | — |
+| 7 — Render production deploy | not started (needs render login) | — |
+| 8 — Production hardening | not started | — |
+| 9 — E2E evidence + docs | not started | — |
+
+## Phase 0 — probe results (2026-06-12)
+
+```
+$ npm view @guildai/agents-sdk version
+npm error 401 Unauthorized - GET https://app.guild.ai/npm/@guildai%2fagents-sdk
+$ which render
+render not found
+$ gh auth status        → Logged in (nihalnihalani) ✅ (CI gate dependency OK)
+$ python3 --version     → Python 3.14.3 ✅
+$ node --version        → v25.2.1 ✅
+$ cp -n .env.example .env → created; 13 empty credential slots
+```
+
+## DECISIONS
+
+| Date | Decision | Basis |
+|---|---|---|
+| 2026-06-12 | **Guild path = REST descope (primary).** `@guildai/agents-sdk` lives on Guild's PRIVATE npm registry (app.guild.ai/npm, 401 without auth) — not public npm. libs/guild will be built REST-first per CLAUDE.md's descope spec. If a Guild PAT later grants registry access, SDK becomes an optional upgrade, not a rewrite. | `npm view` 401 output above |
+| 2026-06-12 | Phase 1 scaffold proceeds during Phase 0 blockage per the never-idle guardrail (scaffold needs no credentials). | Loop guardrails |
+
+## BLOCKERS (all need the human — signup/OAuth in a browser)
+
+| # | Service | Env var(s) | Where to get it | Verification command (runs automatically next firing) |
+|---|---|---|---|---|
+| B1 | Guild.ai | `GUILD_PAT`, `GUILD_API_BASE` | guild.ai → open beta signup → `npm i @guildai/cli -g && guild auth login` (account may need a Guild contact / hackathon rep) | REST session create probe + retry `npm view` with registry auth |
+| B2 | ClickHouse Cloud | `CLICKHOUSE_HOST`, `CLICKHOUSE_USER`, `CLICKHOUSE_PASSWORD` | clickhouse.cloud → free trial (no credit card) | `python3 -c "import clickhouse_connect; print(clickhouse_connect.get_client(...).query('SELECT 1').result_rows)"` |
+| B3 | Langfuse | `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` | cloud.langfuse.com → new project → API keys | test span emitted + visible via API |
+| B4 | Pioneer (Fastino) | `PIONEER_API_KEY` | pioneer.ai → Settings → API Keys | GLiNER2 severity-schema call, latency MEASURED; GLiGuard screen on sample text |
+| B5 | Airbyte | `AIRBYTE_CLIENT_ID`, `AIRBYTE_CLIENT_SECRET` | cloud.airbyte.com → settings → applications | workspace list + GitHub/Jira connector visibility |
+| B6 | Senso.ai | `SENSO_API_KEY` | senso.ai signup ($100 free tier, no CC) | `senso whoami` / REST doc-list |
+| B7 | Composio | `COMPOSIO_API_KEY` (+ browser OAuth for Slack workspace & Jira project) | composio.dev dashboard → API key; then `session.link()` flows for Slack (chat:write) + Jira (create) | link() status check for both apps |
+| B8 | Anthropic | `ANTHROPIC_API_KEY` | console.anthropic.com → API keys | 1-token claude-fable-5 message call |
+| B9 | Render | (CLI login, no env var) | render.com signup; `brew install render && render login` | `render whoami` |
+
+**Fastest unblock path for the human (~30 min):** B2 ClickHouse → B3 Langfuse → B4 Pioneer → B6 Senso → B8 Anthropic (all no-CC self-serve, unblocks Phases 2+3+6), then B7 Composio (Phase 4), B5 Airbyte (Phase 5), B9 Render (Phase 7), B1 Guild (talk to sponsor rep — hardest, also least self-serve).
+
+## MEASURED NUMBERS
+
+| Metric | Value | Command | Date |
+|---|---|---|---|
+| *(empty — populated as credentials land; no number ships to the UI without a row here)* | | | |
+
+## Blocker age (escalation counter — louder message at 3 consecutive firings)
+
+All B1–B9: opened firing 1 (2026-06-12).
