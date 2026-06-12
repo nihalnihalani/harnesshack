@@ -9,7 +9,7 @@ Harness Engineering Hack, June 12 2026. Sources: hackathon Discord (per-sponsor 
 | 1 | Anthropic credits | ✅ **DONE 1:40 PM** — key in `.env`, claude-fable-5 call verified (end_turn) | Signup links EXPIRED 12:00 PM PT — credits landed via the form anyway | 5 min + wait |
 | 2 | Langfuse promo | ✅ **DONE 12:55 PM** — keys in `.env`, test span verified | Code `HARNESSHACK2026` "needs to be used TODAY" per ClickHouse slides | 10 min |
 | 3 | ClickHouse Cloud | ✅ **DONE 1:10 PM** — creds in `.env`, SELECT 1 verified, schema applied (events/metrics/airbyte_history) | $400 credits via QR — **QR not yet redeemed, account on 30-day trial; scan slide 9 to stack the credits** | 10 min |
-| 4 | Pioneer promo | ❌ | Code `SFJune2026Tokens` = Pro plan with $1,500 inference credits; blocks GLiNER2 hot path | 10 min |
+| 4 | Pioneer promo | 🔶 key `0612hack` in `.env`; **API 403 `card_verification_required` until Pro plan + promo at agent.pioneer.ai/billing** | Code `SFJune2026Tokens` = Pro plan with $1,500 inference credits; blocks GLiNER2 hot path | 10 min |
 | 5 | Render credits | ❌ | $100 claim link live now; **prize requires Render Workflows** (see below) | 5 min |
 | 6 | Senso | ❌ | Challenge requires publishing output to cited.md; $100 free tier, no CC | 10 min |
 | 7 | Guild | ✅ **DONE 1:25 PM** — PAT in `.env`, workspace `0612hack` selected, session API probed | 50M free tokens on signup, self-serve (easier than feared); REST path confirmed | 15 min |
@@ -66,8 +66,9 @@ Judging: 5 criteria × 20% each — Idea, Technical Implementation, Tool Use (�
 2. API key: pioneer.ai → Settings → API Keys. REST only — `POST https://api.pioneer.ai/inference`, `X-API-Key` header.
 3. Claude Code / coding-agent integration + new model router (open beta): https://docs.pioneer.ai/claude-code
 4. Onboarding Notion (prize details): https://wholesale-mackerel-22f.notion.site/EXT-Harness-Engineering-Hackathon-Onboarding-37c8413d474480909f4be6cee9c96ff9
-5. Reps: Dhruv, Thao. 402 error → local `transformers` fallback (GLiNER2/GLiGuard are Apache-2.0), label honestly as local inference.
+5. Reps: Dhruv, Thao. 402/403 error → local `transformers` fallback (GLiNER2/GLiGuard are Apache-2.0), label honestly as local inference.
 6. Verify: GLiNER2 severity-schema call — **record the measured latency for the demo badge**.
+7. **Gotchas found live (June 12):** account signup grants Partner-plan "$50/day free credits" in the UI, but ALL API calls (even `/v1/models`) return 403 `card_verification_required` until a Hobby/Pro plan is active — the promo code is entered at the Pro-plan Stripe checkout (agent.pioneer.ai/billing). API is OpenAI-compatible (`POST /v1/chat/completions`, `Authorization: Bearer`) per their console; the `/inference` + `X-API-Key` shape from earlier research also exists — verify which serves GLiNER2 once billing unlocks.
 
 ## 5. Render (CLI login, no env var) — $100 credits, 3 prizes in Render credits
 
