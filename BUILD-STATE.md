@@ -79,6 +79,13 @@ shutdown: 12 ticks, 48 rows inserted   (continuous-flow path verified live)
 
 **CLAIM-INTEGRITY RULING (supersedes the ~250s expectation in the demo line):** the live onset-to-onset lag is **135 seconds (2m15s)** — smaller than the 250s climb-start→breach ground truth, exactly as the pre-author flagged. THE DEMO SAYS 2m15s / "precedes by 2m 15s". The 250s figure may only be described as "the pool began departing baseline ~4 minutes before the breach" if narrating the CSV ground truth separately. demo-scripts.md sync happens at Phase 9. Secondary cascade edge (payments → checkout, 55s) is a bonus talking point — a real detected cascade.
 
+## FIRING-12 LIVE-DRIVE FINDINGS (partial Phase 3 de-risking; GLiNER2+ClickHouse live, Senso/Guild pending)
+
+Drove a REAL incident through IncidentAgent.ingest_alert with live ClickHouse + GLiNER2 defaults. Three findings, all real:
+1. **FIXED — alert→text was a `key=value` blob** → GLiNER2 returned severity=None (parser correctly refused to guess). Added `_alert_to_text()` rendering a faithful natural-language sentence (no severity words injected). Re-verified: extraction.completed severity P3, service extracted, 154ms. Regression test added (TestAlertToText).
+2. **CLAIM-INTEGRITY — GLiNER2 classifies this incident as P3, NOT the demo narrative's "P1".** Consistent across rich and minimal phrasings. The UI severity badge will say P3. **demo-scripts.md must sync P1→P3 at Phase 9** (cannot edit war-room artifacts before then per loop rule). Recorded here so it is not forgotten.
+3. **CONFIRMED — Guild dual-sink degrades gracefully** (JSONDecodeError from app.guild.ai HTML → explicit DEGRADED event, agent continues; ClickHouse sink unaffected). The resilience layer works as designed; the event log/product is intact on the ClickHouse sink while B1 is undecided.
+
 ## DECISIONS
 
 | Date | Decision | Basis |
@@ -130,8 +137,10 @@ Absorbed at firing 8. CHANGES TO THE PLAN:
 | **Causal lag, DB→payments (THE demo number)** | **135 s (2m15s)** | live lagInFrame onset pairing | 2026-06-13 |
 | Causal lag, payments→checkout (cascade) | 55 s | same query | 2026-06-13 |
 | Anthropic claude-fable-5 round-trip (8 max_tokens) | 4335 ms | anthropic.messages.create | 2026-06-13 |
+| GLiNER2 in-agent extraction (faithful alert sentence) | severity P3, conf 0.648, 154-164ms | IncidentAgent.ingest_alert live drive | 2026-06-13 |
 | **GLiNER2 severity-extraction inference (THE Pioneer badge number)** | **123–199 ms (server-reported)** | extract_severity() live, result.data.latency_ms | 2026-06-13 |
 | GLiNER2 severity-classification confidence (demo text) | 0.822 (P3) | extract_severity() live | 2026-06-13 |
+| **GLiNER2 verdict for THE demo incident** | **P3** (not the narrative's P1) | live, consistent across rich + minimal text | 2026-06-13 |
 | Replay throughput | 960 rows / 150.2 s at --speed 100 | scripts/replay.py | 2026-06-13 |
 | Langfuse ingestion visibility lag | ~20 s | API readback poll, 5s interval | 2026-06-13 |
 | GLiNER2 severity+services extraction, server-reported latency_ms (3 calls: 176.1 / 180.1 / 133.9) | 134–180 ms | `POST api.pioneer.ai/inference` model `fastino/gliner2-base-v1`, X-API-Key, schema `{entities, classifications:[{task,labels}]}` | 2026-06-12 |

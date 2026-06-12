@@ -333,3 +333,34 @@ class TestModuleHelpers:
 
     def test_primary_owner_returns_none_when_absent(self):
         assert primary_owner_from_ownership_doc("no owners documented here", "payments") is None
+
+
+class TestAlertToText:
+    """firing-12: GLiNER2 returns severity=None for a key=value blob; the agent
+    must feed it a faithful natural-language sentence (no severity words)."""
+
+    def test_renders_natural_language_sentence(self):
+        from apps.worker.agent import _alert_to_text
+
+        text = _alert_to_text(
+            {
+                "incident_id": "inc-1",
+                "service": "payments-service",
+                "metric": "p99_ms",
+                "value": 2466.1,
+                "timestamp": "2026-06-12T14:15:00Z",
+            }
+        )
+        assert "payments-service" in text and "p99_ms" in text and "2466.1" in text
+        # prose, not a key=value blob
+        assert "=" not in text
+        assert text.endswith(".")
+        # claim integrity: no severity label words injected into the text
+        for label in ("P0", "P1", "P2", "P3", "critical", "severe"):
+            assert label not in text
+
+    def test_unknown_shape_is_described_truthfully(self):
+        from apps.worker.agent import _alert_to_text
+
+        text = _alert_to_text({"foo": "bar"})
+        assert "foo" in text and "bar" in text and "=" not in text

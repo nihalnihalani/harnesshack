@@ -168,6 +168,28 @@ def _default_publish(event: TypedEvent) -> None:
     )
 
 
+def _alert_to_text(payload: dict[str, Any]) -> str:
+    """Render an alert payload as a faithful natural-language sentence.
+
+    GLiNER2 classifies severity from prose, not a `key=value` blob (firing-12
+    live finding). States only true facts from the payload; injects no
+    severity words. Falls back to a generic sentence for unknown shapes.
+    """
+    svc = payload.get("service")
+    metric = payload.get("metric")
+    value = payload.get("value")
+    ts = payload.get("timestamp")
+    iid = payload.get("incident_id", "")
+    if svc and metric and value is not None:
+        sentence = f"Alert {iid}: service {svc} metric {metric} breached with value {value}"
+        if ts:
+            sentence += f" at {ts}"
+        return sentence + "."
+    # Unknown payload shape — describe it truthfully rather than guess.
+    parts = ", ".join(f"{k} {v}" for k, v in sorted(payload.items()))
+    return f"Incident alert with {parts}."
+
+
 def _default_extract_severity(text: str) -> Any:
     from libs.pioneer.gliner2 import extract_severity
 
@@ -359,7 +381,11 @@ class IncidentAgent:
 
         # (a) GLiNER2 schema-conditioned extraction — FIRST, before any
         # frontier-LLM step (small models first; ordering is unit-tested).
-        alert_text = " ".join(f"{key}={value}" for key, value in sorted(payload.items()))
+        # Render the alert as a faithful NATURAL-LANGUAGE sentence: GLiNER2's
+        # classifier returns severity=None for a terse `key=value` blob (it
+        # cannot resolve a label), surfaced by the firing-12 live drive. The
+        # sentence states only true alert facts — no severity words injected.
+        alert_text = _alert_to_text(payload)
         extraction, ok = self._degradable(
             "gliner2_extraction",
             partial(self._extract_severity, alert_text),
