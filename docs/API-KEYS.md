@@ -13,7 +13,7 @@ Harness Engineering Hack, June 12 2026. Sources: hackathon Discord (per-sponsor 
 | 5 | Render credits | ✅ **DONE 2:14 PM** — $100 promo `HTHON100-847F12` redeemed (valid → May 31 2027); CLI logged in, workspace `Charlie's workspace` set, `render whoami` ✓ | $100 claim link live now; **prize requires Render Workflows** (see below) | 5 min |
 | 6 | Senso | ✅ **DONE 2:25 PM** — key in `.env`, org `0612hack` (Free tier) verified via `senso whoami`/`org get` | Challenge requires publishing output to cited.md; $100 free tier, no CC | 10 min |
 | 7 | Guild | ✅ **DONE 1:23 PM** — PAT in `.env`, workspace `0612hack` selected, session API probed | 50M free tokens on signup, self-serve (easier than feared); REST path confirmed | 15 min |
-| 8 | Composio | ❌ | API key + browser OAuth for Slack/Jira — OAuth takes minutes, do before crunch | 15 min |
+| 8 | Composio | ✅ **DONE 2:58 PM** — key in `.env`, Slack + Jira OAuth both ACTIVE, real Slack post + Jira `SCRUM-1` sent live | API key + browser OAuth for Slack/Jira — OAuth takes minutes, do before crunch | 15 min |
 | 9 | Airbyte | ✅ **DONE 2:19 PM** — app `0612hack` creds in `.env`, agent-API token grant ✓, 575 connectors listed | Free tier 1,000 agent ops/month is "enough" per their rep; MCP fallback exists | 15 min |
 | — | OpenUI | n/a | NO API key needed (BYO LLM key) | 0 |
 | — | TrueFoundry | skip | Free to use; only if we add it — not in current architecture | 15 min |
@@ -105,9 +105,19 @@ Judging: 5 criteria × 20% each — Idea, Technical Implementation, Tool Use (�
 
 ## 8. Composio (`COMPOSIO_API_KEY`) — $200 prize
 
+**Status: ✅ DONE 2:58 PM June 12.** Key in `.env` (`ak_…`), `COMPOSIO_USER_ID=incident-sherpa`. Slack + Jira connected accounts both ACTIVE; verified with a REAL live send each — Slack message to `#incidents` (ts returned) and Jira ticket `SCRUM-1` created on `incidentsherpa.atlassian.net`. Demo Slack workspace + Jira site are dedicated throwaways (honest: real OAuth, real API, real posts — just a clean stage).
+
+**Live-API contract gotchas (cost an hour; the authored `composio_link.py` + `send.py` both had to be corrected):**
+- `toolkits.authorize()` is DEAD — it routes through the retired `connected_accounts.initiate()` endpoint (HTTP 400, "no longer supported"). The working path is `connected_accounts.link(user_id, auth_config_id)` → returns a `redirect_url` the user approves → poll `connected_accounts.list` until `ACTIVE`. Composio-managed auth configs are created with `auth_configs.create(toolkit, options={"type": "use_composio_managed_auth"})`.
+- Connect links (`connect.composio.dev/link/...`) expire in ~2 min — generate fresh right before the user clicks.
+- `tools.execute(...)` for MANUAL execution needs `dangerously_skip_version_check=True` (else `ToolVersionRequiredError`; `"latest"` is rejected).
+- `SLACK_SEND_MESSAGE` rejects `text` — use **`markdown_text`** (or `fallback_text` + blocks).
+- `JIRA_CREATE_ISSUE` args that worked: `{project_key, issue_type: "Task", summary, description}`. The demo Jira is a SCRUM/software project → `JIRA_PROJECT_KEY=SCRUM`, issue types are Story/Task/Bug (Task exists).
+- `send.py` fixes shipped (markdown_text + skip_version_check); 13 choke-point tests green.
+
 1. composio.dev dashboard → API key. **No event credits — docs only** (Andy Tran confirmed).
-2. Docs: https://docs.composio.dev/docs. Then run `session.link()` flows for Slack (chat:write) and Jira (create) — browser OAuth, do it before the crunch. Never `initiate()` (deprecated, 410).
-3. Verify: link() status for both apps.
+2. Docs: https://docs.composio.dev/docs. Then authorize Slack (chat:write) + Jira (create) via `connected_accounts.link()` (NOT `authorize()`/`initiate()` — both dead).
+3. Verify: `connected_accounts.list(user_ids=[uid])` shows both ACTIVE, then a real `tools.execute` send.
 
 ## 9. Airbyte (`AIRBYTE_CLIENT_ID/SECRET`) — $1,750 track
 

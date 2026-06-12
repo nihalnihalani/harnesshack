@@ -139,7 +139,9 @@ def _action_arguments(action: str, text: str) -> dict[str, Any]:
     """Per-action argument shapes (field names flagged for B7 confirmation)."""
     if action == SLACK_ACTION:
         channel = os.environ.get("SLACK_INCIDENT_CHANNEL", "").strip() or "#incidents"
-        return {"channel": channel, "text": text}
+        # Live SLACK_SEND_MESSAGE (verified 2026-06-12) rejects `text`: it wants
+        # `markdown_text` for normal content (or `fallback_text` + blocks).
+        return {"channel": channel, "markdown_text": text}
     if action == JIRA_ACTION:
         summary = text.splitlines()[0][:255]
         project_key = os.environ.get("JIRA_PROJECT_KEY", "").strip() or "INC"
@@ -194,8 +196,15 @@ def _screened_send(
     user_id = _composio_user_id()
 
     def _execute() -> Any:
+        # dangerously_skip_version_check: manual tools.execute (verified
+        # 2026-06-12) errors with ToolVersionRequiredError unless a toolkit
+        # version is pinned; "latest" is rejected for manual execution, so we
+        # skip the check and ride the account's current toolkit version.
         return client.tools.execute(
-            action, arguments=_action_arguments(action, text), user_id=user_id
+            action,
+            arguments=_action_arguments(action, text),
+            user_id=user_id,
+            dangerously_skip_version_check=True,
         )
 
     response = call_traced(
