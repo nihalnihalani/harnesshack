@@ -94,7 +94,10 @@ is open; idempotency keys register at receipt (durable dedupe → Phase 2).
 
 All B1–B9: opened firing 1, still open at firing 3 (2026-06-12) → ESCALATION SENT (consolidated priority table to user). Next escalation at firing 6 if unchanged.
 
-## Pre-authored awaiting credentials (written so gates run the moment keys land)
+## Pre-authored awaiting credentials — COMPLETE (2026-06-12, commits 1fcf8bb..7ea1c50; verified 75 passed / 1 live-deselected, ruff clean)
 
-- Phase 2: demo_assets/incident_metrics.csv, scripts/replay.py, scripts/load_generator.py, libs/clickhouse/causal.py — EXECUTION gate still pending B2
-- Phase 3 prep: scripts/trigger.py, demo_assets/incident_payload.json, scripts/seed_senso.py (content authored; seeding pending B6)
+- Phase 2 code ready: incident_profile.py (seeded source-of-truth curves), make_incident_csv.py + committed incident_metrics.csv (960 rows, byte-pinned by test; pool_used departs baseline at +650s, p99 breaches 2400ms at +900s = exact 250s lead), replay.py (--speed, --truncate-first), load_generator.py (--inject db_pool_exhaustion, --rate-multiplier, SIGINT-clean), causal.py (rolling z-score onsets + lagInFrame pairing, all server-side ClickHouse SQL with bound params)
+- Phase 3 prep ready: trigger.py + incident_payload.json (verbatim recorded breach row 2026-06-12T14:15:00Z / 2466.1ms, validated against the real AlertPayload model), seed_senso.py (3 structured runbooks — payments step 3 raises pool ceiling 100→150 — 2 postmortems INC-2417/INC-2289, ownership map dana-chen 9-of-12; endpoint shape flagged for on-site confirmation since Senso docs are sign-in gated)
+- **THE MOMENT B2 LANDS:** `python3 scripts/replay.py --truncate-first --speed 100` → `pytest -m live` (asserts the real payments-db-primary→payments-service causal edge) → `python3 scripts/load_generator.py --inject db_pool_exhaustion --max-ticks 80`
+- **THE MOMENT B6 LANDS:** `python3 scripts/seed_senso.py` (confirm /content/raw endpoint shape first)
+- CLAIM-INTEGRITY NOTE for the demo script: causal.py returns detected ONSET-TO-ONSET lag, which will be SMALLER than the 4m10s climb-start→breach figure (that one is CSV ground truth, asserted in tests). Whichever number the live query produces is the number the demo says. Do not conflate the two.
