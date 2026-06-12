@@ -7,7 +7,12 @@ requires-python = ">=3.12"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
-addopts = "-q"
+# Live-marked tests need real credentials/clusters (BUILD-STATE.md blockers);
+# they are excluded by default and run explicitly via `pytest -m live`.
+addopts = "-q -m \"not live\""
+markers = [
+    "live: requires real credentials and live services (B2 ClickHouse etc.); run via `pytest -m live`",
+]
 
 [tool.ruff]
 line-length = 100
@@ -16,3 +21,8 @@ extend-exclude = ["apps/frontend"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+# Scripts insert the repo root into sys.path before importing libs/ so that
+# `python3 scripts/foo.py` works from anywhere — imports follow that bootstrap.
+"scripts/*" = ["E402"]

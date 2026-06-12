@@ -19,8 +19,16 @@ ALL_CREDENTIAL_ENV_VARS = [
 
 
 @pytest.fixture(autouse=True)
-def unconfigured_env(monkeypatch: pytest.MonkeyPatch):
-    """Guarantee the unconfigured state and reset per-process API state."""
+def unconfigured_env(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch):
+    """Guarantee the unconfigured state and reset per-process API state.
+
+    Live-marked tests (`pytest -m live`) are the one exception: they exist to
+    exercise REAL services, so they keep whatever credentials the environment
+    provides instead of having them stripped.
+    """
+    if request.node.get_closest_marker("live"):
+        yield
+        return
     for var in ALL_CREDENTIAL_ENV_VARS:
         monkeypatch.delenv(var, raising=False)
     api_main._seen_keys.clear()
