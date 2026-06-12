@@ -86,18 +86,27 @@ Note: the IncidentSherpa script below incorporates the Round 4 Pioneer fix — s
           | apps, one OAuth grant, no copy-paste." ALT-TAB back.
 
 1:40–1:55 | TAB 2: Langfuse trace waterfall (live data):
-          |  GLiNER2 inference [measured]ms | Senso retrieval 312ms | ClickHouse causal
-          |  SQL 204ms | postmortem draft (claude-fable-5) 6.8s $0.0041 |
+          |  GLiNER2 inference [measured]ms | Airbyte Context Store query 312ms |
+          |  Senso retrieval 290ms | ClickHouse causal SQL 204ms |
+          |  postmortem draft (claude-fable-5) 6.8s $0.0041 |
           |  GLiGuard output-screen 92ms | SLACK_SEND 190ms | JIRA_CREATE 340ms
           | PRESENTER: "Every call instrumented via Langfuse — latency, token
           | cost, eval score. Total LLM spend for this incident response:
           | four-tenths of a cent."
 
-1:55–2:10 | TAB 3: Airbyte connections — GitHub → ClickHouse and Jira →
+1:55–2:10 | Timeline log entry highlighted:
+          |  "02:14:09 — Airbyte Context Store: 4 related Jira tickets +
+          |   2 PRs found (semantic search, 312ms)"
+          | Badge on the owner suggestion: "via Airbyte Context Store"
+          | Then TAB 3: Airbyte connections — GitHub → ClickHouse and Jira →
           | ClickHouse, both green, "last sync 1h ago".
-          | PRESENTER: "Ownership isn't a guess. Airbyte pulled 90 days of
-          | GitHub and Jira history into ClickHouse. dana-chen resolved nine
-          | of the last twelve payments incidents."
+          | PRESENTER: "Ownership isn't a guess. During the incident the
+          | agent ran a live semantic query against Airbyte's Context Store —
+          | pre-indexed, three hundred milliseconds, no vendor API hammering —
+          | and found the four Jira tickets and two PRs that touched this
+          | service. The 90-day baseline behind it synced through these two
+          | connectors. And the semantic-search precision improvements?
+          | Airbyte shipped those yesterday."
 
 2:10–2:20 | Back to timeline; open Guild audit-log drawer:
           |  "Session INC-2026-0612-001 | Investigating → Mitigating → Resolved
@@ -133,7 +142,7 @@ Note: the IncidentSherpa script below incorporates the Round 4 Pioneer fix — s
 | Guild.ai | 0:00–0:08, 2:10–2:20 | State-machine stepper from frame 1; audit-log drawer with session ID, credential scopes, 14 typed events |
 | ClickHouse | 0:42–0:55, 1:40–1:55 | Live LAG/LEAD SQL popover; "ClickHouse causal SQL — 204ms" Langfuse row |
 | Langfuse | 1:40–1:55 | Full trace waterfall, cost column, "$0.0041" spoken |
-| Airbyte | 1:55–2:10 | Connector list, GitHub+Jira green, "via Airbyte Agent Engine" detail on hover |
+| Airbyte | 1:55–2:10 | Live Context Store query event in the timeline with 312ms latency badge + "via Airbyte Context Store" tag on the owner suggestion; connector list tab (GitHub+Jira green); spoken June-11 release name-drop |
 | Senso.ai | 1:10–1:25 | Cited runbook card with "[Senso / payments-runbook-v4]" source tag |
 | Composio | 1:25–1:40 | Live Slack message + Jira ticket badge |
 | Pioneer | 0:55–1:10 | "Pioneer / GLiNER2 — [measured]ms" badge; schema-conditioned extraction + GLiGuard guardrail spoken |
