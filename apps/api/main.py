@@ -1,9 +1,15 @@
-"""IncidentSherpa webhook API — POST /trigger, GET /events (SSE), GET /health.
+"""IncidentSherpa webhook API — alert ingest, SSE stream, resolve/confirm, health.
 
-Phase 1 behavior is honest about its blockers: with CLICKHOUSE_* env vars
-empty (BUILD-STATE.md B2), /trigger returns 503 instead of pretending to
-persist, and /health reports every unconfigured dependency as "blocked".
-No mocks, no fake "ok".
+Endpoints: POST /trigger (idempotent ingest -> IncidentAgent pipeline in the
+background), GET /events (SSE), POST /incidents/{id}/resolve (state machine ->
+postmortem stream over the bus), POST /incidents/{id}/confirm-owner (human
+confirmation as a typed event), GET /fallback/postmortem (the F2 artifact —
+404 until a REAL run has cached one), GET /health.
+
+Behavior is honest about its blockers: with CLICKHOUSE_* env vars empty
+(BUILD-STATE.md B2), /trigger returns 503 instead of pretending to persist;
+a background pipeline hitting an open blocker publishes a visible
+SKIPPED_NOT_CONFIGURED event naming it. No mocks, no fake "ok".
 """
 
 from __future__ import annotations
@@ -11,19 +17,40 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import logging
 import os
 from datetime import UTC, datetime
 from typing import Annotated, Any
 
-from fastapi import FastAPI, Header, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
-from apps.worker.agent import TypedEvent
+from apps.worker.agent import IllegalTransitionError, IncidentAgent, TypedEvent
+from apps.worker.postmortem import (
+    FALLBACK_HTML_PATH,
+    PostmortemBlockedError,
+    generate_postmortem,
+    write_fallback_html,
+)
 from libs.clickhouse import record_event
 from libs.errors import NotConfiguredError
 
+logger = logging.getLogger("incidentsherpa.api")
+
 app = FastAPI(title="IncidentSherpa webhook API", version="0.1.0")
+
+# Browser clients (the Next.js timeline) consume /events via EventSource and
+# POST resolve/confirm cross-origin; without CORS headers the browser blocks
+# both. No credentials are exchanged, so a permissive origin is acceptable
+# for the demo; override with FRONTEND_ORIGIN in production.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[os.environ.get("FRONTEND_ORIGIN", "").strip() or "*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 # --------------------------------------------------------------------------
@@ -79,6 +106,48 @@ def _payload_hash(alert: AlertPayload) -> str:
     return hashlib.sha256(alert.model_dump_json().encode("utf-8")).hexdigest()
 
 
+# Per-process registry of live IncidentAgents (incident_id -> agent). The
+# resolve/confirm-owner endpoints act on these; a process restart honestly
+# loses in-flight agents (404) — durable session resume is a later phase.
+_agents: dict[str, IncidentAgent] = {}
+
+
+def _publish_api_event(incident_id: str, event_type: str, payload: dict[str, Any]) -> None:
+    bus.publish(
+        {
+            "ts": datetime.now(UTC).isoformat(),
+            "incident_id": incident_id,
+            "event_type": event_type,
+            "payload": payload,
+        }
+    )
+
+
+def _run_agent_ingest(agent: IncidentAgent, alert_payload: dict[str, Any]) -> None:
+    """Background INVESTIGATING pipeline. Failures surface as visible events.
+
+    An open blocker (NotConfiguredError) is published as an honest
+    SKIPPED_NOT_CONFIGURED event naming it — the timeline shows exactly what
+    is blocked instead of silently doing nothing.
+    """
+    try:
+        agent.ingest_alert(alert_payload)
+    except NotConfiguredError as exc:
+        _publish_api_event(
+            agent.incident_id,
+            "SKIPPED_NOT_CONFIGURED",
+            {"step": "agent_pipeline", "error": str(exc)},
+        )
+    except Exception as exc:  # surfaced as a visible event, never swallowed
+        # (includes EventLogFatalError — both sinks down is a loud failure)
+        logger.exception("agent pipeline failed for %s", agent.incident_id)
+        _publish_api_event(
+            agent.incident_id,
+            "agent.error",
+            {"step": "agent_pipeline", "error": f"{type(exc).__name__}: {exc}"},
+        )
+
+
 # --------------------------------------------------------------------------
 # POST /trigger — alert ingest
 # --------------------------------------------------------------------------
@@ -87,6 +156,7 @@ def _payload_hash(alert: AlertPayload) -> str:
 @app.post("/trigger")
 async def trigger(
     alert: AlertPayload,
+    background_tasks: BackgroundTasks,
     idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
 ) -> dict[str, Any]:
     key = idempotency_key or _payload_hash(alert)
@@ -118,7 +188,130 @@ async def trigger(
             "payload": event.payload,
         }
     )
-    return {"duplicate": False, "incident_id": incident_id, "event_type": event.event_type}
+
+    # Construct the IncidentAgent and run the INVESTIGATING pipeline in the
+    # background (idempotency above guarantees this happens once per alert;
+    # a duplicate incident_id on a NEW alert keeps the existing agent).
+    agent_started = False
+    if incident_id not in _agents:
+        agent = IncidentAgent(incident_id)
+        _agents[incident_id] = agent
+        background_tasks.add_task(_run_agent_ingest, agent, alert.model_dump(mode="json"))
+        agent_started = True
+
+    return {
+        "duplicate": False,
+        "incident_id": incident_id,
+        "event_type": event.event_type,
+        "agent_started": agent_started,
+    }
+
+
+# --------------------------------------------------------------------------
+# POST /incidents/{incident_id}/resolve — human clicks Resolve
+# --------------------------------------------------------------------------
+
+
+async def _stream_postmortem(incident_id: str) -> None:
+    """Background postmortem run: tokens stream to the bus from inside
+    generate_postmortem; on a clean finish the full text is cached as the F2
+    fallback artifact (a REAL run — the only way that file ever exists)."""
+    chunks: list[str] = []
+    try:
+        async for chunk in generate_postmortem(incident_id):
+            chunks.append(chunk)
+    except NotConfiguredError as exc:
+        _publish_api_event(
+            incident_id,
+            "SKIPPED_NOT_CONFIGURED",
+            {"step": "postmortem_generation", "error": str(exc)},
+        )
+        return
+    except PostmortemBlockedError:
+        return  # BLOCKED_BY_GUARDRAIL already on the bus; nothing leaked
+    except Exception as exc:  # surfaced as a visible event, never swallowed
+        logger.exception("postmortem generation failed for %s", incident_id)
+        _publish_api_event(
+            incident_id,
+            "postmortem_error",
+            {"error": f"{type(exc).__name__}: {exc}"},
+        )
+        return
+    try:
+        write_fallback_html(incident_id, "".join(chunks))
+    except Exception:  # the artifact is best-effort; the live run already succeeded
+        logger.exception("failed to cache F2 fallback artifact for %s", incident_id)
+
+
+@app.post("/incidents/{incident_id}/resolve", status_code=202)
+def resolve_incident(incident_id: str, background_tasks: BackgroundTasks) -> dict[str, Any]:
+    """Human clicks Resolve: MITIGATING -> RESOLVED, then the postmortem
+    streams token-by-token over the SSE bus (postmortem_token events)."""
+    agent = _agents.get(incident_id)
+    if agent is None:
+        raise HTTPException(status_code=404, detail=f"unknown incident {incident_id!r}")
+    try:
+        agent.resolve(resolved_by="human")
+    except IllegalTransitionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except NotConfiguredError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"blocked dependency — see BUILD-STATE.md ({exc})",
+        ) from exc
+    background_tasks.add_task(_stream_postmortem, incident_id)
+    return {"incident_id": incident_id, "state": agent.state, "postmortem": "streaming"}
+
+
+# --------------------------------------------------------------------------
+# POST /incidents/{incident_id}/confirm-owner — human confirmation
+# --------------------------------------------------------------------------
+
+
+class OwnerConfirmation(BaseModel):
+    """A HUMAN confirms the suggested owner (the agent only ever suggests)."""
+
+    owner: str = Field(min_length=1)
+    confirmed_by: str = Field(default="human", min_length=1)
+
+
+@app.post("/incidents/{incident_id}/confirm-owner")
+def confirm_owner(incident_id: str, confirmation: OwnerConfirmation) -> dict[str, Any]:
+    agent = _agents.get(incident_id)
+    if agent is None:
+        raise HTTPException(status_code=404, detail=f"unknown incident {incident_id!r}")
+    try:
+        event = agent.confirm_owner(confirmation.owner, confirmed_by=confirmation.confirmed_by)
+    except IllegalTransitionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except NotConfiguredError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"blocked dependency — see BUILD-STATE.md ({exc})",
+        ) from exc
+    return {"incident_id": incident_id, "event_type": event.event_type, "payload": event.payload}
+
+
+# --------------------------------------------------------------------------
+# GET /fallback/postmortem — the F2 artifact (404 until a REAL run cached one)
+# --------------------------------------------------------------------------
+
+
+@app.get("/fallback/postmortem")
+def fallback_postmortem() -> FileResponse:
+    """Serve demo_assets/fallback_postmortem.html IF a real run has cached it.
+
+    404 otherwise — the frontend treats that as 'feature disabled'. The file
+    is only ever written by write_fallback_html after a live success; there
+    is no placeholder on any path.
+    """
+    if not FALLBACK_HTML_PATH.is_file():
+        raise HTTPException(
+            status_code=404,
+            detail="no fallback postmortem exists yet — it is cached only after a "
+            "REAL completed run (never placeholder content)",
+        )
+    return FileResponse(FALLBACK_HTML_PATH, media_type="text/html")
 
 
 # --------------------------------------------------------------------------

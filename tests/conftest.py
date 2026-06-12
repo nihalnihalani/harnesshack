@@ -32,8 +32,10 @@ def unconfigured_env(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyP
     for var in ALL_CREDENTIAL_ENV_VARS:
         monkeypatch.delenv(var, raising=False)
     api_main._seen_keys.clear()
+    api_main._agents.clear()
     yield
     api_main._seen_keys.clear()
+    api_main._agents.clear()
 
 
 @pytest.fixture()
