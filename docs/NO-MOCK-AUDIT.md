@@ -83,6 +83,25 @@ Two sub-kinds, both confined to `tests/`:
 **None.** 64/64 hits triaged legitimate; nothing was changed to "pass" the
 audit.
 
+## Post-docs re-run (same day, after README/ARCHITECTURE/audit docs landed)
+
+```
+$ grep -rniE 'mock|stub|fake|lorem|TODO|FIXME' \
+    --exclude-dir={node_modules,.git,.venv,.next} .
+97 hits — the original 64 above, plus 33 new, all in documentation written
+AFTER the sweep:
+  27  docs/NO-MOCK-AUDIT.md   (this file — it quotes every hit it triages)
+   3  docs/ARCHITECTURE.md    (describes the no-mock machinery + this audit)
+   3  README.md               ("no mocks, no fake ok" posture statements)
+```
+
+**Category 4 — self-referential audit/readme prose (33 hits): LEGITIMATE.**
+The only `TODO`/`FIXME`/`lorem` matches in the whole tree remain the audit
+grep command itself quoted in `build-loop.md:65` and in this document, plus
+the prose stating the zeros (`docs/ARCHITECTURE.md:151`,
+`docs/NO-MOCK-AUDIT.md:15`). Still **0 real TODO/FIXME/lorem** and 0
+needs-fix findings: 97/97 triaged.
+
 ## Standing rule
 
 Any future hit added to apps/, libs/, or scripts/ that is not (a) an
