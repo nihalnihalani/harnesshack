@@ -12,7 +12,7 @@ Harness Engineering Hack, June 12 2026. Sources: hackathon Discord (per-sponsor 
 | 4 | Pioneer promo | ❌ | Code `SFJune2026Tokens` = Pro plan with $1,500 inference credits; blocks GLiNER2 hot path | 10 min |
 | 5 | Render credits | ❌ | $100 claim link live now; **prize requires Render Workflows** (see below) | 5 min |
 | 6 | Senso | ❌ | Challenge requires publishing output to cited.md; $100 free tier, no CC | 10 min |
-| 7 | Guild | ❌ | 50M free tokens on signup, self-serve (easier than feared); REST path confirmed | 15 min |
+| 7 | Guild | ✅ **DONE 1:25 PM** — PAT in `.env`, workspace `0612hack` selected, session API probed | 50M free tokens on signup, self-serve (easier than feared); REST path confirmed | 15 min |
 | 8 | Composio | ❌ | API key + browser OAuth for Slack/Jira — OAuth takes minutes, do before crunch | 15 min |
 | 9 | Airbyte | ❌ | Free tier 1,000 agent ops/month is "enough" per their rep; MCP fallback exists | 15 min |
 | — | OpenUI | n/a | NO API key needed (BYO LLM key) | 0 |
@@ -87,10 +87,13 @@ Judging: 5 criteria × 20% each — Idea, Technical Implementation, Tool Use (�
 
 ## 7. Guild (`GUILD_PAT`, `GUILD_API_BASE`) — $2,800 top prize track
 
+**Status: ✅ DONE 1:25 PM June 12.** Account `charliegillet`, workspace `0612hack` (set as CLI default). PAT (151-char `u.…` token from `guild auth token`) + `GUILD_API_BASE=https://app.guild.ai` in `.env`; authenticated `guild session list` succeeded.
+
 1. app.guild.ai signup — **every new account gets 50M Guild tokens free**; rep **Cory** grants more on request (#guild-ai).
-2. Docs: docs.guild.ai. PAT via `npm i @guildai/cli -g && guild auth login`.
-3. `@guildai/agents-sdk` is on Guild's PRIVATE npm registry (401/404 publicly — verified twice). The REST descope path in `libs/guild/` stands; SDK is an optional upgrade if the PAT grants registry access.
-4. Verify: REST session-create probe.
+2. Docs: docs.guild.ai. PAT via `npm i @guildai/cli -g && guild auth login` (device flow), then `guild auth token`.
+3. SDK finding (updated): login configured Guild's private registry in `~/.npmrc` under scopes `@guildai-agents`/`@guildai-services` — but `@guildai/agents-sdk` AND the obvious candidates under those scopes all 404 even authenticated. **REST/CLI descope path stands.** Ask rep Cory for the real SDK package name if we want the upgrade.
+4. Phase-3 implementation options discovered in the CLI: full `guild session` group (create/get/events/tasks/send/interrupt), `guild credentials`, `guild trigger`, **`guild mcp`** (stdio MCP server — could be the cleanest agent integration), `guild setup` (injects Guild skills into Claude Code).
+5. Verified: authenticated session-list probe against workspace `0612hack`.
 
 ## 8. Composio (`COMPOSIO_API_KEY`) — $200 prize
 
