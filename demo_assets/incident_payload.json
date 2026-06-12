@@ -1,0 +1,7 @@
+{
+  "service": "payments-service",
+  "metric": "p99_ms",
+  "value": 2466.1,
+  "timestamp": "2026-06-12T14:15:00Z",
+  "incident_id": "inc-2026-0612-payments-p99"
+}
