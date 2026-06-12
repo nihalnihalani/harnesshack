@@ -83,19 +83,30 @@ while IFS= read -r _line || [ -n "$_line" ]; do
 done < .env
 log ".env summary: $_envset set, $_envempty empty"
 
-# --- port availability -------------------------------------------------------
-log "Checking ports"
+# --- port availability (auto-free) -------------------------------------------
+# A stale uvicorn/next from a previous run is the #1 reason "./run.sh won't
+# start". Rather than hard-fail and make you hunt the PID mid-demo, we FREE the
+# port: SIGTERM the holder, wait, escalate to SIGKILL, then proceed. (You
+# authorized reclaiming these project ports.) Only a port we truly cannot free
+# is fatal.
+log "Checking ports (busy ones are freed automatically)"
 port_busy() { command -v lsof >/dev/null 2>&1 || return 1; lsof -nP -iTCP:"$1" -sTCP:LISTEN >/dev/null 2>&1; }
-if port_busy "$API_PORT"; then
-  note "port $API_PORT holders:"; lsof -nP -iTCP:"$API_PORT" -sTCP:LISTEN 2>/dev/null | tee -a "$RUN_LOG"
-  fail "Port $API_PORT (API) is already in use. Free it:  lsof -ti :$API_PORT | xargs kill"
-fi
-note "  $API_PORT free"
-if port_busy "$FRONTEND_PORT"; then
-  note "port $FRONTEND_PORT holders:"; lsof -nP -iTCP:"$FRONTEND_PORT" -sTCP:LISTEN 2>/dev/null | tee -a "$RUN_LOG"
-  fail "Port $FRONTEND_PORT (frontend) in use. Free it:  lsof -ti :$FRONTEND_PORT | xargs kill   (or FRONTEND_PORT=3001 ./run.sh)"
-fi
-note "  $FRONTEND_PORT free"
+free_port() {  # $1 = port, $2 = human label
+  if ! port_busy "$1"; then note "  $1 ($2) free"; return 0; fi
+  warn "port $1 ($2) is in use — freeing it:"
+  lsof -nP -iTCP:"$1" -sTCP:LISTEN 2>/dev/null | tee -a "$RUN_LOG"
+  lsof -ti :"$1" 2>/dev/null | xargs kill 2>/dev/null      # polite SIGTERM
+  _n=1; while [ "$_n" -le 5 ]; do port_busy "$1" || break; sleep 1; _n=$((_n+1)); done
+  if port_busy "$1"; then
+    note "  $1 still held after SIGTERM — escalating to kill -9"
+    lsof -ti :"$1" 2>/dev/null | xargs kill -9 2>/dev/null
+    sleep 1
+  fi
+  port_busy "$1" && fail "Port $1 ($2) could not be freed. Inspect:  lsof -nP -iTCP:$1 -sTCP:LISTEN"
+  note "  $1 ($2) freed"
+}
+free_port "$API_PORT" "API"
+free_port "$FRONTEND_PORT" "frontend"
 
 # --- load .env (the Python apps read os.environ directly) --------------------
 log "Loading .env into the environment"
