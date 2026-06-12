@@ -4,3 +4,4 @@ langfuse>=3.0
 httpx>=0.27  # Guild/Pioneer/Senso REST clients (Phase 3)
 composio>=0.13  # Slack/Jira actions via session.link() (Phase 4)
 anthropic>=0.40  # claude-fable-5 postmortem drafting ONLY (Phase 6, B8-gated)
+airbyte-agent-sdk>=0.1.242
