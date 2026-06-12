@@ -26,6 +26,7 @@ type Props = {
 export function PostmortemPanel({ incidentId, state, events }: Props) {
   const [requested, setRequested] = useState(false);
   const [postError, setPostError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const derived = useMemo(() => {
     const tokens: { index: number; token: string }[] = [];
@@ -80,6 +81,17 @@ export function PostmortemPanel({ incidentId, state, events }: Props) {
     }
   };
 
+  const copyPostmortemToClipboard = async () => {
+    if (!derived.text) return;
+    try {
+      await navigator.clipboard.writeText(derived.text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy postmortem text: ", err);
+    }
+  };
+
   const waitingForFirstToken =
     (requested || state === "RESOLVED") &&
     derived.text.length === 0 &&
@@ -90,49 +102,119 @@ export function PostmortemPanel({ incidentId, state, events }: Props) {
   const elapsedMs = derived.complete ? asNumber(derived.complete.elapsed_ms) : null;
   const model = derived.complete ? asString(derived.complete.model) : null;
 
+  // Pulse effect only when in MITIGATING state (meaning investigation is complete and team is ready to resolve)
+  const isMitigating = state === "MITIGATING";
+
   return (
-    <section className="flex min-h-0 flex-col rounded-lg border border-slate-800 bg-slate-950/60">
-      <header className="flex items-center justify-between border-b border-slate-800 px-4 py-2">
-        <span className="text-xs uppercase tracking-widest text-slate-400">
-          Postmortem — generated from the event log
-        </span>
-        <button
-          type="button"
-          onClick={resolve}
-          disabled={!incidentId || state !== "MITIGATING" || requested}
-          className="rounded border border-emerald-500/70 bg-emerald-500/15 px-4 py-1.5 text-sm font-bold text-emerald-200 hover:bg-emerald-500/30 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          {state === "RESOLVED" ? "Resolved" : requested ? "Resolving…" : "Incident Resolved"}
-        </button>
+    <section className="glass-panel rounded-xl overflow-hidden shadow-2xl relative flex min-h-[16rem] flex-col">
+      {/* Top micro shine accent */}
+      <div className={`absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-transparent to-transparent ${
+        derived.complete 
+          ? "via-emerald-500/30" 
+          : waitingForFirstToken 
+            ? "via-cyan-500/30" 
+            : "via-slate-500/10"
+      }`} />
+
+      <header className="flex items-center justify-between border-b border-slate-900/60 bg-slate-950/30 px-4 py-3">
+        <div className="flex items-center gap-2">
+          <svg className="h-4 w-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          <span className="text-xs font-black uppercase tracking-widest text-slate-400 font-mono">
+            STENO INCIDENT POSTMORTEM
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {derived.text.length > 0 && (
+            <button
+              type="button"
+              onClick={copyPostmortemToClipboard}
+              className={`inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold font-mono rounded border transition-all duration-200 ${
+                copied
+                  ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-400"
+                  : "border-slate-800 bg-slate-900/40 text-slate-400 hover:border-slate-700 hover:text-slate-200"
+              }`}
+            >
+              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+              {copied ? "COPIED ✓" : "COPY REPORT"}
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={resolve}
+            disabled={!incidentId || state !== "MITIGATING" || requested}
+            className={`inline-flex items-center gap-1.5 rounded-lg border px-4 py-1.5 text-xs font-bold font-mono uppercase tracking-wider transition-all duration-300 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40 ${
+              state === "RESOLVED"
+                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                : requested
+                  ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-400"
+                  : isMitigating
+                    ? "border-emerald-500 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/35 animate-pulse shadow-[0_0_12px_rgba(16,185,129,0.15)] hover:shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:-translate-y-0.5"
+                    : "border-slate-800 bg-slate-900/30 text-slate-500"
+            }`}
+          >
+            {state === "RESOLVED" ? (
+              <>
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+                RESOLVED
+              </>
+            ) : requested ? (
+              <>
+                <span className="h-3 w-3 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+                RESOLVING…
+              </>
+            ) : (
+              <>
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                </svg>
+                RESOLVE INCIDENT
+              </>
+            )}
+          </button>
+        </div>
       </header>
 
-      <div className="min-h-[14rem] flex-1 overflow-y-auto px-4 py-3">
-        {postError && <p className="mb-2 text-sm text-red-400">{postError}</p>}
+      <div className="flex-1 overflow-y-auto px-5 py-4 custom-scrollbar bg-slate-950/5">
+        {postError && <p className="mb-3.5 text-xs font-bold font-mono text-red-400 bg-red-500/5 border border-red-500/20 px-3.5 py-2 rounded-lg">{postError}</p>}
 
         {derived.blocked && (
-          <div className="rounded border border-red-600/70 bg-red-600/10 p-3 text-sm text-red-300">
-            <strong>BLOCKED BY GUARDRAIL.</strong> GLiGuard refused the complete
-            postmortem text before any token was released
+          <div className="rounded-lg border border-red-600/30 bg-red-600/5 p-4 text-xs font-medium text-red-400 shadow-sm leading-relaxed">
+            <strong className="font-extrabold uppercase font-mono tracking-wider mr-1">BLOCKED BY GUARDRAIL.</strong>
+            GLiGuard security screeners refused the complete postmortem draft text because it violated privacy rules before any token was released
             {Array.isArray(derived.blocked.categories) &&
             derived.blocked.categories.length > 0
               ? ` (categories: ${(derived.blocked.categories as unknown[]).join(", ")})`
               : ""}
-            . Nothing was streamed.
+            . Nothing was streamed to the bus.
           </div>
         )}
         {derived.skipped && (
-          <div className="rounded border border-amber-500/70 bg-amber-500/10 p-3 text-sm text-amber-300">
-            <strong>Skipped — not configured.</strong> {derived.skipped}
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 text-xs font-medium text-amber-400 leading-relaxed">
+            <strong className="font-extrabold uppercase font-mono tracking-wider mr-1">Skipped — not configured.</strong>
+            {derived.skipped}
           </div>
         )}
         {derived.failed && (
-          <div className="rounded border border-red-500/70 bg-red-500/10 p-3 text-sm text-red-300">
-            <strong>Postmortem generation failed.</strong> {derived.failed}
+          <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-4 text-xs font-medium text-red-400 leading-relaxed">
+            <strong className="font-extrabold uppercase font-mono tracking-wider mr-1">Postmortem generation failed.</strong>
+            {derived.failed}
           </div>
         )}
 
         {waitingForFirstToken && (
-          <div aria-label="Generating postmortem" className="space-y-2">
+          <div aria-label="Generating postmortem report" className="space-y-3.5 py-2">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="h-3 w-3 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+              <span className="text-[10px] font-black font-mono tracking-widest text-cyan-400 uppercase">DRAFTING POSTMORTEM REPORT VIA CLAUDE...</span>
+            </div>
             <Skeleton count={1} height="1.4rem" width="55%" />
             <Skeleton count={4} height="0.9rem" />
             <Skeleton count={1} height="1.4rem" width="40%" />
@@ -141,10 +223,10 @@ export function PostmortemPanel({ incidentId, state, events }: Props) {
         )}
 
         {derived.text.length > 0 && (
-          <div className="postmortem-stream text-slate-200">
+          <div className="postmortem-stream text-slate-200 markdown-body">
             <MarkDownRenderer variant="clear" textMarkdown={derived.text} />
             {!derived.complete && (
-              <span aria-hidden className="streaming-caret">
+              <span aria-hidden className="streaming-caret ml-1 select-none">
                 ▍
               </span>
             )}
@@ -157,22 +239,34 @@ export function PostmortemPanel({ incidentId, state, events }: Props) {
           !derived.blocked &&
           !derived.skipped &&
           !derived.failed && (
-            <p className="text-sm italic text-slate-500">
-              Click &ldquo;Incident Resolved&rdquo; and the postmortem streams
-              from the typed event log — the agent reads its own notes, it does
-              not reconstruct.
-            </p>
+            <div className="flex flex-col items-center justify-center p-6 text-center min-h-[10rem]">
+              <svg className="h-10 w-10 text-slate-700 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+              <p className="text-xs font-bold font-mono tracking-wider text-slate-500 uppercase">
+                Ready for resolution
+              </p>
+              <p className="mt-1.5 max-w-sm text-[11px] text-slate-600 font-medium leading-normal">
+                Click &ldquo;Resolve Incident&rdquo; to trigger immediate, automated postmortem streaming compiled directly from the structured event trail.
+              </p>
+            </div>
           )}
       </div>
 
       {derived.complete && (
-        <footer className="border-t border-slate-800 px-4 py-2 text-xs text-slate-400">
-          completed in{" "}
-          <span className="font-mono font-bold text-emerald-300">
-            {elapsedMs !== null ? `${(elapsedMs / 1000).toFixed(1)}s` : "—"}
-          </span>{" "}
-          (measured){model ? ` · ${model}` : ""} · GLiGuard-screened before
-          streaming
+        <footer className="border-t border-slate-900/60 bg-slate-950/20 px-4 py-2.5 text-[10px] font-bold font-mono text-slate-500 uppercase tracking-wider flex flex-wrap items-center justify-between gap-2 select-none">
+          <div>
+            COMPLETED IN{" "}
+            <span className="font-extrabold text-emerald-400">
+              {elapsedMs !== null ? `${(elapsedMs / 1000).toFixed(1)}s` : "—"}
+            </span>{" "}
+            (MEASURED) · GLIGUARD-SCREENED
+          </div>
+          {model && (
+            <div className="bg-slate-900 border border-slate-800 px-2 py-0.5 rounded text-[9px] text-slate-400 font-extrabold uppercase">
+              {model}
+            </div>
+          )}
         </footer>
       )}
     </section>
