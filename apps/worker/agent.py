@@ -14,11 +14,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 
-class IncidentState(str, Enum):
+class IncidentState(StrEnum):
     """Incident lifecycle states (CLAUDE.md core domain model)."""
 
     INVESTIGATING = "INVESTIGATING"

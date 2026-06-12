@@ -12,7 +12,7 @@ import asyncio
 import hashlib
 import json
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated, Any
 
 from fastapi import FastAPI, Header, HTTPException, Request
@@ -96,7 +96,7 @@ async def trigger(
 
     incident_id = alert.incident_id or f"inc-{key[:12]}"
     event = TypedEvent(
-        ts=datetime.now(timezone.utc),
+        ts=datetime.now(UTC),
         incident_id=incident_id,
         event_type="alert.received",
         payload=alert.model_dump(mode="json"),
@@ -138,7 +138,7 @@ async def events(request: Request) -> StreamingResponse:
                     break
                 try:
                     item = await asyncio.wait_for(queue.get(), timeout=15.0)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     yield ": keepalive\n\n"
                     continue
                 yield f"data: {json.dumps(item)}\n\n"
