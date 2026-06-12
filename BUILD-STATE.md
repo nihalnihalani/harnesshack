@@ -133,6 +133,8 @@ Absorbed at firing 8. CHANGES TO THE PLAN:
 | GLiNER2 severity-classification confidence (demo text) | 0.822 (P3) | extract_severity() live | 2026-06-13 |
 | Replay throughput | 960 rows / 150.2 s at --speed 100 | scripts/replay.py | 2026-06-13 |
 | Langfuse ingestion visibility lag | ~20 s | API readback poll, 5s interval | 2026-06-13 |
+| GLiNER2 severity+services extraction, server-reported latency_ms (3 calls: 176.1 / 180.1 / 133.9) | 134–180 ms | `POST api.pioneer.ai/inference` model `fastino/gliner2-base-v1`, X-API-Key, schema `{entities, classifications:[{task,labels}]}` | 2026-06-12 |
+| GLiGuard prompt_safety screen, server-reported latency_ms (first call — cold start, wall 13.7 s) | 426 ms | `POST api.pioneer.ai/inference` model `fastino/gliguard-LLMGuardrails-300M`, task `prompt_safety` | 2026-06-12 |
 
 ## Blocker age (escalation counter — louder message at 3 consecutive firings)
 
