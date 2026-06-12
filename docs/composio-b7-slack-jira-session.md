@@ -52,7 +52,7 @@ docs or memory. The authored contract was wrong on every point:
 1. **API key**: composio.dev dashboard → Settings → API keys → create `0612hack`.
    Permissions: Full access is fine; minimal scope = Tool execution (Full),
    Connected accounts (Full), Auth configs (Read), Tools (Read).
-   Key landed in `.env`: `COMPOSIO_API_KEY=ak_HbiwW6J33FR5q_LaorHN`.
+   Key landed in `.env`: `COMPOSIO_API_KEY=ak_REDACTED`.
 2. **Toolkits**: dashboard → Toolkits → enable **Slack** and **Jira** with
    Composio-managed OAuth (creates the auth configs `authorize()` uses).
 3. **OAuth**: `python3 scripts/composio_link.py` opens browser consent for each;
@@ -60,7 +60,7 @@ docs or memory. The authored contract was wrong on every point:
 
 `.env` config used:
 ```
-COMPOSIO_API_KEY=ak_HbiwW6J33FR5q_LaorHN
+COMPOSIO_API_KEY=ak_REDACTED
 COMPOSIO_USER_ID=incident-sherpa
 SLACK_INCIDENT_CHANNEL=#incidents
 JIRA_PROJECT_KEY=SCRUM   # site incidentsherpa.atlassian.net, project "Sherpa"
