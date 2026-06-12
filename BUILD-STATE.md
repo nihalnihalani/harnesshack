@@ -3,7 +3,7 @@
 > Handoff memory between loop firings. Cold readers: read CLAUDE.md first for project law.
 > Loop: cron job `459218a5`, every 20 min. Started 2026-06-12.
 
-**Current phase: 2 (blocked on B2 ClickHouse). REPO IS CODE-COMPLETE FOR ALL PHASES (verified firing 6: 208 tests / 1 live-deselected, ruff clean, CI 27437375093 green, npm build clean). Phase 6 authoring landed (commits fbc5098..e82501f): stenographer postmortem (verbatim-log sentinels, buffer→GLiGuard-screen→replay-at-measured-pace, zero-leak on block), lifecycle endpoints (/resolve, /confirm-owner, agent-wired /trigger), full war-room frontend (timeline, stepper, causal graph w/ real SQL popover, measured-only latency badges, F2 disabled until a real run caches the artifact — correctly absent from demo_assets/). NOTHING LEFT TO BUILD WITHOUT CREDENTIALS. Both escalations sent (firings 3 and 6). Every firing from here: re-test .env → on key landing run the pre-written gates.**
+**Current phase: 2 (blocked on B2 ClickHouse). Phase 8 credential-free portion + Phase 9 docs COMPLETE (firing 8, commits 24b518b..53f822f: webhook bearer auth + per-IP rate limit w/ 16 tests, structured JSON logging, pip-audit 4/4 fixed, npm audit 20 fixed + 6 accepted w/ rationale, secrets sweep 0 hits in 24,559 patch lines, no-mock sweep 97/97 triaged zero needs-fix, README + docs/ARCHITECTURE.md; verified: 231 passed / 1 live-deselected, ruff clean, CI 27439383731 green). REPO IS CODE-COMPLETE FOR ALL PHASES (verified firing 6: 208 tests / 1 live-deselected, ruff clean, CI 27437375093 green, npm build clean). Phase 6 authoring landed (commits fbc5098..e82501f): stenographer postmortem (verbatim-log sentinels, buffer→GLiGuard-screen→replay-at-measured-pace, zero-leak on block), lifecycle endpoints (/resolve, /confirm-owner, agent-wired /trigger), full war-room frontend (timeline, stepper, causal graph w/ real SQL popover, measured-only latency badges, F2 disabled until a real run caches the artifact — correctly absent from demo_assets/). NOTHING LEFT TO BUILD WITHOUT CREDENTIALS. Both escalations sent (firings 3 and 6). Every firing from here: re-test .env → on key landing run the pre-written gates.**
 
 ## Phase checklist
 
@@ -83,6 +83,15 @@ is open; idempotency keys register at receipt (durable dedupe → Phase 2).
 | B9 | Render | (CLI login, no env var) | render.com signup; `brew install render && render login` | `render whoami` |
 
 **Fastest unblock path for the human (~30 min):** B2 ClickHouse → B3 Langfuse → B4 Pioneer → B6 Senso → B8 Anthropic (all no-CC self-serve, unblocks Phases 2+3+6), then B7 Composio (Phase 4), B5 Airbyte (Phase 5), B9 Render (Phase 7), B1 Guild (talk to sponsor rep — hardest, also least self-serve).
+
+## NEW INTEL — docs/API-KEYS.md (user-committed f7e08f5, hackathon Discord + ClickHouse slides + Devpost)
+
+Absorbed at firing 8. CHANGES TO THE PLAN:
+1. **TIME-CRITICAL:** Anthropic signup links EXPIRED 12:00 PM PT (human escalation needed NOW); Langfuse promo `HARNESSHACK2026` must be used TODAY; ClickHouse $400 via QR; Pioneer promo `SFJune2026Tokens` = $1,500 credits.
+2. **Render prize REQUIRES Render Workflows** — current render.yaml is classic services only. DECISION NEEDED at Phase 7: add a Workflows component (evaluate render.yaml `workflows` support) or accept reduced Render-prize fit. Logged as open decision.
+3. **Senso challenge requires publishing output to `cited.md`** — new deliverable: the agent's cited runbook/ownership retrievals must also be published to a cited.md artifact. Add to Phase 5/9 checklist (small: write retrievals + citations to cited.md during incident runs).
+4. **Submission (Devpost, deadline 4:30 PM PDT):** repo must be flipped PUBLIC before submitting; needs Render URL + 3-min video. Judging = 5×20%: Idea / Technical Implementation / Tool Use (>=3 sponsors) / Presentation / **Autonomy (acts on real-time data without manual intervention — load_generator + webhook auto-ingest is our story)**.
+5. Guild is self-serve with 50M free tokens (easier than feared — B1 odds improved); Airbyte free tier 1,000 agent ops is sufficient per rep; OpenUI needs no key; Jua: skip.
 
 ## MEASURED NUMBERS
 
