@@ -1,7 +1,8 @@
-"""Guild REST session client tests — request shapes + keyless honesty.
+"""Guild session client tests — VERIFIED-LIVE REST contract + keyless honesty.
 
 No credentials, no network: real builders/parsers of libs/guild/session.py.
-Live endpoint confirmation happens on-site when B1 lands (descope.md).
+The live REST contract (app.guild.ai/api, /workspaces/{ws}/sessions,
+/sessions/{id}/events) was confirmed live 2026-06-13 (BUILD-STATE.md firing 20).
 """
 
 from __future__ import annotations
@@ -13,60 +14,48 @@ import pytest
 from apps.worker.agent import TypedEvent
 from libs.errors import NotConfiguredError, UnexpectedResponseShapeError
 from libs.guild.session import (
-    SESSIONS_PATH,
+    API_BASE,
     _parse_session_id,
-    append_audit_event,
     build_audit_event_payload,
     build_session_request,
-    close_session,
     create_session,
 )
 
 
 class TestKeyless:
-    def test_create_session_raises_b1(self):
+    def test_create_session_raises_b1_without_workspace(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        monkeypatch.delenv("GUILD_WORKSPACE", raising=False)
         with pytest.raises(NotConfiguredError, match="B1"):
-            create_session("inc-1")
-
-    def test_append_audit_event_raises_b1(self):
-        event = TypedEvent(
-            ts=datetime.now(UTC), incident_id="inc-1", event_type="state.transition"
-        )
-        with pytest.raises(NotConfiguredError, match="B1"):
-            append_audit_event("sess-1", event)
-
-    def test_close_session_raises_b1(self):
-        with pytest.raises(NotConfiguredError, match="B1"):
-            close_session("sess-1")
-
-    def test_partial_config_names_the_missing_var(self, monkeypatch: pytest.MonkeyPatch):
-        monkeypatch.setenv("GUILD_API_BASE", "https://api.guild.test")
-        with pytest.raises(NotConfiguredError, match="GUILD_PAT"):
             create_session("inc-1")
 
 
 class TestRequestShapes:
-    def test_sessions_path_is_the_descope_convention(self):
-        assert SESSIONS_PATH == "/v1/sessions"
+    def test_api_base_is_the_control_plane(self):
+        assert API_BASE == "https://app.guild.ai/api"
 
-    def test_session_request_names_the_incident(self):
+    def test_session_request_is_chat_with_initial_prompt(self):
         body = build_session_request("inc-42")
-        assert body["name"] == "incident-inc-42"
-        assert body["metadata"]["incident_id"] == "inc-42"
+        assert body["session_type"] == "chat"
+        assert "inc-42" in body["initial_prompt"]
 
-    def test_audit_event_payload_is_the_typed_event_verbatim(self):
+    def test_audit_event_payload_wraps_typed_event_as_json_mode(self):
         ts = datetime(2026, 6, 12, 14, 15, 0, tzinfo=UTC)
         event = TypedEvent(
             ts=ts,
             incident_id="inc-42",
             event_type="runbook.retrieved",
-            payload={"citation": "Runbook: payments-service p99 latency breach"},
+            payload={"citation": "payments-p99-runbook.md (6cff5947)"},
         )
         assert build_audit_event_payload(event) == {
-            "ts": "2026-06-12T14:15:00+00:00",
-            "incident_id": "inc-42",
-            "event_type": "runbook.retrieved",
-            "payload": {"citation": "Runbook: payments-service p99 latency breach"},
+            "content": {
+                "ts": "2026-06-12T14:15:00+00:00",
+                "incident_id": "inc-42",
+                "event_type": "runbook.retrieved",
+                "payload": {"citation": "payments-p99-runbook.md (6cff5947)"},
+            },
+            "mode": "json",
         }
 
 

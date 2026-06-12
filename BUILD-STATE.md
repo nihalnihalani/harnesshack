@@ -12,7 +12,7 @@
 | 0 — Preflight & credential gates | **PARTIAL — all 9 services blocked on human signup** (see BLOCKERS); credential-free probes done | Guild SDK probe + runtime checks below |
 | 1 — Scaffold + CI | **COMPLETE (2026-06-12)** | Gate outputs below (pytest 29 green, next build clean, CI run pass) |
 | 2 — ClickHouse schema + live ingestion | **COMPLETE (2026-06-13, firing 9+)** | Gate outputs below — Phase 2 section |
-| 3 — Agent core | not started (needs GUILD_PAT, PIONEER_API_KEY, SENSO_API_KEY, ANTHROPIC_API_KEY) | — |
+| 3 — Agent core | **COMPLETE (2026-06-13, firing 20)** — full gate met live | gate evidence below |
 | 4 — Live actions | not started (needs COMPOSIO_API_KEY + Slack/Jira OAuth) | — |
 | 5 — Airbyte data layer | not started (needs AIRBYTE_CLIENT_ID/SECRET) | — |
 | 6 — Postmortem + frontend | not started | — |
@@ -147,7 +147,7 @@ The control-plane REST API DOES exist on app.guild.ai — our descope code's `/v
 
 | # | Service | Env var(s) | Where to get it | Verification command (runs automatically next firing) |
 |---|---|---|---|---|
-| B1 | Guild.ai | `GUILD_PAT` set, `GUILD_API_BASE` set | **PAT VALID but DECISION NEEDED (2026-06-13, firing 10).** `GUILD_API_BASE=https://app.guild.ai` is the **Agent Hub API** (`/api/me`→user charliegillet, `/api/agents`→hub listings); the assumed REST descope endpoints `/v1/sessions`,`/v1/sessions/{id}/events` return the SPA HTML (don't exist there); `/api/sessions` 404. The control-plane Sessions/Credentials/audit API is NOT on app.guild.ai. **HOWEVER the PAT now authenticates the private npm registry: `@guildai/agents-sdk@0.2.55` + `@guildai/cli@0.12.3` are installable** (.npmrc `//app.guild.ai/npm/:_authToken=$GUILD_PAT`). See DECISIONS for the 3 options. | resolved once a Guild path is chosen + a real session/audit call succeeds |
+| ~~B1~~ | ~~Guild.ai~~ | **RESOLVED firing 20 (Option B-CLI)** — user ran `guild auth login`; rewired libs/guild/session.py to the CLI's REST control-plane (app.guild.ai/api, token via `guild auth token` or GUILD_TOKEN, POST /workspaces/{ws}/sessions + /sessions/{id}/events). Live: created a session per incident, 50 audit entries. GUILD_WORKSPACE=home set. Render note: set GUILD_TOKEN env (no browser there). OLD: ~~PAT valid but decision needed (2026-06-13, firing 10).** `GUILD_API_BASE=https://app.guild.ai` is the **Agent Hub API** (`/api/me`→user charliegillet, `/api/agents`→hub listings); the assumed REST descope endpoints `/v1/sessions`,`/v1/sessions/{id}/events` return the SPA HTML (don't exist there); `/api/sessions` 404. The control-plane Sessions/Credentials/audit API is NOT on app.guild.ai. **HOWEVER the PAT now authenticates the private npm registry: `@guildai/agents-sdk@0.2.55` + `@guildai/cli@0.12.3` are installable** (.npmrc `//app.guild.ai/npm/:_authToken=$GUILD_PAT`). See DECISIONS for the 3 options. | resolved once a Guild path is chosen + a real session/audit call succeeds |
 | ~~B2~~ | ~~ClickHouse Cloud~~ | **RESOLVED firing 10 (2026-06-13)** — creds in .env (host zr8in8fpga.us-west-2.aws.clickhouse.cloud), `SELECT 1` → 1 over HTTPS. All three pre-written gates ran green: replay.py --truncate-first --speed 100 (960 rows / 240 ticks), `pytest -m live` 1 passed (real payments-db-primary→payments-service causal edge asserted on the cluster), load_generator --inject db_pool_exhaustion --max-ticks 80 (320 rows, p99 breach detected t+250s after injection) | — | done |
 | ~~B2~~ | ~~ClickHouse~~ | **RESOLVED (2026-06-13)** — SELECT 1 in 2088ms (server 25.12.1, us-west-2); schema applied (events 397ms, metrics 244ms, airbyte_history 388ms); replay 960 rows/150.2s at --speed 100; causal gate PASSED; load_generator live-injected 48 rows/12 ticks | — | done |
 | ~~B3~~ | ~~Langfuse~~ | **RESOLVED firing 9 (2026-06-13)** — live span via libs/tracing @traced, confirmed by API readback: trace c0d181911da7b49e093fad9c843095e9, visible after 20s. Fix required first: tracing.py was v3-API, installed SDK is 4.7.1 (see DECISIONS + CLAUDE.md Learned Rules) | — | done |
@@ -155,7 +155,7 @@ The control-plane REST API DOES exist on app.guild.ai — our descope code's `/v
 | B4-GLiGuard | Pioneer GLiGuard | **DECISION NEEDED** — GLiGuard is NOT in Pioneer's hosted /v1/models catalog (70 entries, all generative; even working gliner2-base isn't listed → catalog is generative-only). Two real paths: **(A)** local Apache-2.0 `transformers` inference (already the designed demo-script fallback; adds the model download + torch dep) or **(B)** ask the rep for the hosted GLiGuard model id / endpoint. Until resolved, the Composio choke-point fails CLOSED (no unscreened sends — honest, not a mock). | gliguard.screen() live call OR local-transformers screen succeeds |
 | B5-connectors | Airbyte connectors | **NEW (firing 15)** — credential verified but workspace has 0 connectors; needs GitHub + a Jira project (seeded incident tickets) authorized in the Airbyte dashboard. | `connect('jira')` returns an executor; a read action returns ≥1 real ticket |
 | ~~B5-auth~~ | ~~Airbyte~~ | **CREDENTIAL VERIFIED (2026-06-13, firing 14)** — client-credentials token (1503 chars) via POST api.airbyte.com/v1/applications/token; workspace 097cb00d-5739-47f5-bfab-87a67b9e2550 (charlie.gillet1@gmail.com) listed. Workspace is EMPTY (0 sources/0 connections) — Phase 5 must provision GitHub+Jira sources + ClickHouse destination + a 90-day sync, or use the agent-sdk Context Store surface. | Phase 5 build (connectors + live Context Store query) |
-| B6 | Senso.ai | `SENSO_API_KEY` provided but **REJECTED (firing 14)** | The provided key `tgr_…` returns 401 "Invalid API key" against the confirmed base https://sdk.senso.ai/api/v1 with the correct X-API-Key scheme (base returns JSON 401 not 404, so base+scheme are right — only the VALUE is wrong). The `tgr_` prefix looks like a TRIGGER/webhook token, not the dashboard API key. NEEDS the real Senso API key from the dashboard (org 0612hack). | `httpx.get(sdk.senso.ai/api/v1/orgs/me, headers={X-API-Key:key})` → 200 |
+| ~~B6~~ | ~~Senso.ai~~ | **RESOLVED firing 18-20** — wrong host was the bug (apiv2.senso.ai/api/v1 + /org/search + 2-step KB upload); client+seeder rewritten; 6 docs seeded; live get_runbook returns cited content. OLD: ~~rejected (firing 14)** | The provided key `tgr_…` returns 401 "Invalid API key" against the confirmed base https://sdk.senso.ai/api/v1 with the correct X-API-Key scheme (base returns JSON 401 not 404, so base+scheme are right — only the VALUE is wrong). The `tgr_` prefix looks like a TRIGGER/webhook token, not the dashboard API key. NEEDS the real Senso API key from the dashboard (org 0612hack). | `httpx.get(sdk.senso.ai/api/v1/orgs/me, headers={X-API-Key:key})` → 200 |
 | B7 | Composio | `COMPOSIO_API_KEY` (+ browser OAuth for Slack workspace & Jira project) | composio.dev dashboard → API key; then `python3 scripts/composio_link.py` (OAuth Slack+Jira), `--check` to verify | `python3 scripts/composio_link.py --check` → both ACTIVE. **CONTRACT VERIFIED 2026-06-12 (composio 0.13.1 installed): the authored `session.create()/session.tools.execute()/session.link()` was WRONG — real SDK has NO session; `client.tools.execute(slug, arguments, user_id=...)` + `connected_accounts.link()/toolkits.authorize()` off the Composio instance. send.py rewired (`_get_client`, user_id routing, COMPOSIO_CACHE_DIR guard for read-only homes); choke-point tests + full suite green. ONLY the key + browser OAuth remain.** |
 | ~~B8~~ | ~~Anthropic~~ | **RESOLVED firing 10 (2026-06-13)** — key in .env, 1-token claude-fable-5 call returned 200 (8 in / 1 out tokens, standard tier) | — | done |
 | B9 | Render | (CLI login, no env var) | render.com signup; `brew install render && render login` | `render whoami` |
@@ -184,6 +184,9 @@ Absorbed at firing 8. CHANGES TO THE PLAN:
 | GLiNER2 in-agent extraction (faithful alert sentence) | severity P3, conf 0.648, 154-164ms | IncidentAgent.ingest_alert live drive | 2026-06-13 |
 | Full postmortem run (ingest→resolve→stream complete) | 22.3 s (was 60.3s) | generate_postmortem live, post-tuning | 2026-06-13 |
 | claude-fable-5 postmortem generation (concise, ~350w) | ~21 s | stream_anthropic_completion | 2026-06-13 |
+| Senso get_runbook (cited, live) | 3686 ms | live get_runbook() | 2026-06-13 |
+| Guild session create + 50-event audit trail | live | create_session + append_audit_event + read_audit_events | 2026-06-13 |
+| Phase-3 full ingest (dual-sink incl. Guild) | 25.0 s | IncidentAgent.ingest_alert | 2026-06-13 |
 | **GLiNER2 severity-extraction inference (THE Pioneer badge number)** | **123–199 ms (server-reported)** | extract_severity() live, result.data.latency_ms | 2026-06-13 |
 | GLiNER2 severity-classification confidence (demo text) | 0.822 (P3) | extract_severity() live | 2026-06-13 |
 | **GLiNER2 verdict for THE demo incident** | **P3** (not the narrative's P1) | live, consistent across rich + minimal text | 2026-06-13 |
@@ -215,6 +218,21 @@ All B1–B9: opened firing 1; still open at firing 6 (2026-06-13). Escalations s
 - **THE MOMENT B6 LANDS:** `python3 scripts/seed_senso.py` (confirm /content/raw endpoint shape first)
 - CLAIM-INTEGRITY NOTE for the demo script: causal.py returns detected ONSET-TO-ONSET lag, which will be SMALLER than the 4m10s climb-start→breach figure (that one is CSV ground truth, asserted in tests). Whichever number the live query produces is the number the demo says. Do not conflate the two.
 
+
+## FIRING-20 — PHASE 3 COMPLETE (Senso live + Guild audit live)
+**Gate met live** (`IncidentAgent.ingest_alert` against all real services):
+```
+ingest -> MITIGATING (25.0s)
+GLiNER2 severity: P3 (live)
+causal edges: 2 — payments-db-primary precedes payments-service by 135s (live ClickHouse)
+runbook.retrieved: 1 — cited "payments-p99-runbook.md (6cff5947...)" (live Senso)
+ownership.suggested: 1 (live Senso ownership map)
+Guild DEGRADED: 0 — audit sink LIVE
+Guild session id: 019ebe07-9ff8-351a-... with 50 audit-trail entries (>=6 required)
+Langfuse: every call traced
+```
+ALL Phase-3 sponsors now live: GLiNER2, ClickHouse causal, Senso (cited), Guild (audit), Langfuse. Only Airbyte SKIPs (Phase 5) and GLiGuard degrades (not hosted). 231 tests green.
+**Perf note:** ingest is 25s because the Guild audit sink does one HTTP append per event (~16). Fine for the demo (timeline opens mid-incident, pre-loaded); could make the Guild sink async/non-blocking later for snappier live ingest.
 
 ## FIRING-19 — Guild CLI path mapped (browser-auth required)
 Installed @guildai/cli (0.6.0). Commands: auth/agent/workspace/session. **`guild auth login` is browser-OAuth ONLY** — no --token/env flag for non-interactive auth (tried GUILD_PAT/GUILD_TOKEN → "Not authenticated"). Confirms: Guild's session/audit integration needs either (a) the USER runs `guild auth login` in a browser (30s), then the Python worker shells `guild session create --agent X --workspace Y` + logs events, or (b) the `@guildai/agents-sdk` TS sidecar with the PAT. No raw REST sessions/audit API exists (firing-18). GUILD DECISION for user: **B-CLI** (you run `guild auth login`, we shell to CLI), **B-SDK** (Node sidecar), or **C** (local audit log, drop the $2,800 claim). Until decided, Guild degrades gracefully (ClickHouse sink carries the event log — product intact).
