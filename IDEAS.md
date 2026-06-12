@@ -12,6 +12,39 @@
 
 ---
 
+## PRIZE DISTRIBUTION (CONFIRMED from official board — $18,550+ total)
+
+The original brief mis-modeled most tracks as single-winner. The board shows **multiple paid
+slots** on the highest-value tracks, which changes the EV strategy.
+
+| Track | Paid slots | Breakdown | Strategic read |
+|---|---|---|---|
+| **Guild.ai — Most Innovative** | **7** | 1×$1000, 2×$500, 4×$200 | *Place, don't win.* Forgiving — a 3rd-place slot still pays $200. EV floor much higher than a winner-take-all. |
+| **OpenUI** | **7** | 1×$1000, 1×$500, 5×$100 honorable mentions | *Place, don't win.* 5 honorable-mention slots = very high P(paid) for any real OpenUI use. |
+| **Airbyte (Conquer w/ Context)** | 3 | $1000 / $500 / $250 (Visa) | Note: requires **Agent Engine** (sales-gated private preview) — risky. |
+| **ClickHouse** | 2 + sub | T1: $1000 + $500 CH credits · T2: $250 + $500 CH credits · **+ $350 cash for most impressive Langfuse** | The **$350 Langfuse sub-prize is separately judged** — a clean, low-contest target. |
+| **Render** | 3 | $1000 / $600 / $400 in Render credits | Credits only; secondary. |
+| **TrueFoundry** | 1 | $1000 | Winner-take-all → high variance. |
+| **Pioneer** | 1 | $500 (+ promo: Pro plan $1500 inference credits to all who use it) | Winner-take-all; fine-tune runtime blows the freeze (see kill #9). |
+| **Composio** | 1 | $200 Amazon | Winner-take-all, smallest cash. |
+| **Senso.ai** | 1 | 2k credits | Credits only. |
+
+**Strategic implications (this re-confirms — not overturns — the Final 2):**
+1. **The two best-EV tracks are Guild (7 slots) and OpenUI (7 slots)** — high $ *and* high P(paid).
+   Both finalists already anchor exactly here (AEGIS→Guild, MORPHEUS→OpenUI). ✅
+2. **The $350 Langfuse sub-prize is a near-lock for AEGIS** — AEGIS streams every intercepted agent
+   *intent* as a Langfuse trace; "most impressive use of Langfuse" is precisely that. It's judged
+   separately from ClickHouse placement **and is independent of the Guild-403 onboarding risk**, so
+   it raises AEGIS's EV floor and de-risks its worst case.
+3. **Single-winner tracks (TrueFoundry, Composio, Senso, Pioneer) are higher variance** — this
+   retroactively validates killing the TrueFoundry-anchored COSTFUSE and Pioneer-anchored AUTOMODEL.
+4. **Open question (assumption):** does "Most Innovative Use of Agents (Guild.ai)" require *using
+   Guild.ai*, or is it a general innovation prize Guild sponsors? If general, **MORPHEUS also
+   qualifies** for those 7 slots as a novel agent — a free EV bump. Treat as Guild-required until
+   confirmed (conservative).
+
+---
+
 ## PHASE 0 — PROBLEM BANK (cited; practitioner/incident evidence prioritized)
 
 | # | Problem (one line) | Evidence (link + date) | Who suffers | Why unsolved | Natural tracks |
@@ -290,13 +323,18 @@ P3 [PocketOS, 2026](https://neuraltrust.ai/blog/pocketos-railway-agent) ·
 P4 [$47k loop, 2025-11](https://agentcost.in/docs/blog/ai-agent-cost-explosions-6-hours-governance/) ·
 P12 [PropensityBench/IEEE, 2026](https://spectrum.ieee.org/ai-agents-safety).
 
-**Prize matrix:**
+**Prize matrix (3 realistic paid slots — note the multi-winner forgiveness):**
 
-| Track | Exact integration | Demo beat that proves it | $ |
-|---|---|---|---|
-| Guild.ai — Most Innovative | Policies + audit trail + agent registration live in Guild's control plane; AEGIS is the enforcement arm of its "agent sprawl" thesis | Open Guild dashboard → the blocked action appears as a governed, audited event with the policy that caught it | **$2,800** |
-| ClickHouse (+Langfuse) | Langfuse `@observe()` instruments the agent; every intercepted *intent* (allowed + blocked) streams as a trace into ClickHouse | A live ClickHouse query: "show blocked actions in the last 5 min" returns the `DROP` attempt sub-second | **$1,600 + $350** |
-| *(internal, not claimed)* Composio | The real tools the agent reaches for (GitHub/DB/Slack) — gives the firewall something genuine to intercept | — | — |
+| Track | Slots | Exact integration | Demo beat that proves it | Realistic $ |
+|---|---|---|---|---|
+| **Langfuse $350 sub-prize** (NEAR-LOCK) | 1, separately judged | Langfuse `@observe()` traces every intercepted *intent* (allowed + blocked + approved) as a nested agent/tool tree | The Langfuse trace UI shows the `DROP` attempt flagged BLOCKED with full reasoning chain | **$350** |
+| **Guild.ai — Most Innovative** | **7** (1×$1k, 2×$500, 4×$200) | Policies + audit trail + agent registration in Guild's control plane; AEGIS is the *enforcement arm* of its "agent sprawl" thesis | Guild dashboard → blocked action appears as a governed, audited event with the policy that caught it | up to **$1,000** (floor $200 if it places at all) |
+| **ClickHouse** | 2 (+credits) | Intercepted intents land in ClickHouse for OLAP audit at scale | Live query: "show blocked actions, last 5 min" returns the `DROP` sub-second | up to **$1,000** + CH credits |
+| *(internal, not claimed)* Composio | — | The real tools the agent reaches for (GitHub/DB/Slack) — gives the firewall something genuine to intercept | — | — |
+
+**Why the prize structure favors AEGIS:** the Langfuse $350 is a clean near-lock (its audit story
+*is* Langfuse) and is **independent of the Guild-403 risk**; Guild's 7 slots mean even a modest
+integration likely places for $200+. EV floor ≈ $350 (Langfuse alone) even if Guild onboarding fails.
 
 **Architecture sketch:**
 ```
@@ -344,12 +382,18 @@ pre-build — ever."
 [HN 45129237, 2025](https://news.ycombinator.com/item?id=45129237). Data substrate also serves
 P4/P6 cost & eval questions.
 
-**Prize matrix:**
+**Prize matrix (anchors a 7-slot track — high P(paid)):**
 
-| Track | Exact integration | Demo beat that proves it | $ |
-|---|---|---|---|
-| OpenUI — Best Use | Agent emits a UI spec → OpenUI renders a real React chart component (from a pre-validated set: bar/line/table) bound to the query result | Type a question → a chart **materializes on the projector** in ~5s; ask a different one → a *different* chart appears | **$2,000** |
-| ClickHouse — Best Use | Agent translates NL → **parameterized** SQL over a ClickHouse table of agent traces/cost; sub-second OLAP returns the data the chart binds to | "...last hour" returns instantly over millions of rows; show the generated SQL | **$1,600** |
+| Track | Slots | Exact integration | Demo beat that proves it | Realistic $ |
+|---|---|---|---|---|
+| **OpenUI — Best Use** | **7** (1×$1k, 1×$500, 5×$100) | Agent emits a UI spec → OpenUI renders a real React chart (pre-validated set: bar/line/table) bound to the query result | Type a question → a chart **materializes on the projector** in ~5s; ask a different one → a *different* chart appears | up to **$1,000** (5 honorable-mention slots = high floor) |
+| **ClickHouse — Best Use** | 2 (+credits) | Agent → **parameterized** SQL over a ClickHouse table of agent traces/cost; sub-second OLAP returns the data the chart binds to | "...last hour" returns instantly over millions of rows; show the generated SQL | up to **$1,000** + CH credits |
+| *(optional, if Guild track is general)* Most Innovative | 7 | A self-building-UI agent is a novel agent in its own right | — | bonus upside |
+
+**Why the prize structure favors MORPHEUS:** OpenUI's **5 honorable-mention slots** make "get paid"
+near-certain for any genuine OpenUI use, and few teams will use OpenUI as load-bearingly. If the
+Guild Most-Innovative track turns out to be general (not Guild-product-gated), MORPHEUS gains a
+third forgiving 7-slot track for free.
 
 **Architecture sketch:**
 ```
@@ -387,9 +431,15 @@ with minimal rework.
 ## TIEBREAKER — if I must choose in 10 seconds
 
 **Default pick: MORPHEUS.** Higher final score (85 vs 82), higher ship probability, fewer unverified
-assumptions, and it locks the **under-contested OpenUI $2,000** + ClickHouse $1,600 = $3,600 with a
-demo moment that literally appears on the projector. Ties break toward fewer unverified
-assumptions — and AEGIS carries the Guild-403 onboarding question that MORPHEUS does not.
+assumptions, and it anchors the **7-slot OpenUI track** (5 honorable-mention slots = near-certain to
+get paid) + ClickHouse (2 slots + credits). Realistic E[$] ≈ **$440**. Ties break toward fewer
+unverified assumptions — and AEGIS carries the Guild-403 onboarding question that MORPHEUS does not.
+
+**Note (post-prize-board update):** AEGIS's gap narrowed. Its **$350 Langfuse sub-prize is a
+near-lock and survives even if Guild onboarding fails**, giving it a hard EV floor (~$350) that
+MORPHEUS lacks; plus Guild's 7 slots make a $200+ placement likely. Realistic E[$] ≈ **$410**. If
+you value a guaranteed-paid floor over peak ship-confidence, AEGIS is the safer *money* bet; if you
+value demo legibility and the fewest moving parts, MORPHEUS. Both now clear ~$400 expected.
 
 **But pivot to AEGIS if one thing is true** — the single deciding question:
 
