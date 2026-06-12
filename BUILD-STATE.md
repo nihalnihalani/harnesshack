@@ -3,7 +3,7 @@
 > Handoff memory between loop firings. Cold readers: read CLAUDE.md first for project law.
 > Loop: cron job `459218a5`, every 20 min. Started 2026-06-12.
 
-**Current phase: 2 (blocked on B2 ClickHouse). CODE-COMPLETE THROUGH PHASE 4 + resilience layer (verified firing 5: 171 tests, ruff clean, CI green). Every remaining step is paste-key-then-run-gate. All 9 blockers still open at firing 5; next escalation at firing 6.**
+**Current phase: 2 (blocked on B2 ClickHouse). REPO IS CODE-COMPLETE FOR ALL PHASES (verified firing 6: 208 tests / 1 live-deselected, ruff clean, CI 27437375093 green, npm build clean). Phase 6 authoring landed (commits fbc5098..e82501f): stenographer postmortem (verbatim-log sentinels, buffer→GLiGuard-screen→replay-at-measured-pace, zero-leak on block), lifecycle endpoints (/resolve, /confirm-owner, agent-wired /trigger), full war-room frontend (timeline, stepper, causal graph w/ real SQL popover, measured-only latency badges, F2 disabled until a real run caches the artifact — correctly absent from demo_assets/). NOTHING LEFT TO BUILD WITHOUT CREDENTIALS. Both escalations sent (firings 3 and 6). Every firing from here: re-test .env → on key landing run the pre-written gates.**
 
 ## Phase checklist
 
@@ -92,7 +92,7 @@ is open; idempotency keys register at receipt (durable dedupe → Phase 2).
 
 ## Blocker age (escalation counter — louder message at 3 consecutive firings)
 
-All B1–B9: opened firing 1; still open at firing 5 (2026-06-13). Escalation sent at firing 3; NEXT FIRING (6) ESCALATES AGAIN if .env unchanged.
+All B1–B9: opened firing 1; still open at firing 6 (2026-06-13). Escalations sent at firings 3 and 6 (second one offered explicit waive-Bn syntax). Loop is now purely credential-gated.
 
 ## Pre-authored: Phase 3/4/8 core — COMPLETE (firing 4-5, commits c68ec7a..f8c1c46; verified 171 passed / 1 live-deselected, ruff clean, CI 27436254446 success)
 
