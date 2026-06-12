@@ -24,6 +24,8 @@ Harness Engineering Hack, June 12 2026. Sources: hackathon Discord (per-sponsor 
 - 3-minute demo recording + all Devpost fields
 - **Public GitHub repo** (ours is currently PRIVATE — flip before submitting)
 - Render URL (per #render: "Submissions: 1. Github URL/s, 2. Render URL, 3. Video demo")
+- **⚠️ MUST explicitly SELECT each sponsor prize on Devpost to be considered for it** (organizer slide). Un-ticked tracks aren't judged — tick EVERY track we target: Guild, ClickHouse+Langfuse, Airbyte, OpenUI, Pioneer, Composio, Senso, Render. Missing a box = forfeiting that prize regardless of build quality.
+- ONE submission per team; EVERY team member must be individually registered on Devpost. Submission questions → "Andy from Senso".
 
 Judging: 5 criteria × 20% each — Idea, Technical Implementation, Tool Use (≥3 sponsor tools), Presentation (3-min demo), Autonomy (acts on real-time data without manual intervention).
 
