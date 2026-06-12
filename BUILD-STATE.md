@@ -11,7 +11,7 @@
 |---|---|---|
 | 0 — Preflight & credential gates | **PARTIAL — all 9 services blocked on human signup** (see BLOCKERS); credential-free probes done | Guild SDK probe + runtime checks below |
 | 1 — Scaffold + CI | **COMPLETE (2026-06-12)** | Gate outputs below (pytest 29 green, next build clean, CI run pass) |
-| 2 — ClickHouse schema + live ingestion | not started (needs CLICKHOUSE_*); DDL strings already in libs/clickhouse/schema.py | — |
+| 2 — ClickHouse schema + live ingestion | **COMPLETE (2026-06-13, firing 9+)** | Gate outputs below — Phase 2 section |
 | 3 — Agent core | not started (needs GUILD_PAT, PIONEER_API_KEY, SENSO_API_KEY, ANTHROPIC_API_KEY) | — |
 | 4 — Live actions | not started (needs COMPOSIO_API_KEY + Slack/Jira OAuth) | — |
 | 5 — Airbyte data layer | not started (needs AIRBYTE_CLIENT_ID/SECRET) | — |
@@ -60,6 +60,25 @@ SSE list), render.yaml (3 services + health cron, env-group refs only),
 tests/ (29), .github/workflows/ci.yml. /trigger returns honest 503 while B2
 is open; idempotency keys register at receipt (durable dedupe → Phase 2).
 
+## Phase 2 — gate outputs (2026-06-13, REAL cluster zr8in8fpga.us-west-2.aws.clickhouse.cloud)
+
+```
+$ python3 scripts/replay.py --truncate-first --speed 100
+replay complete: 960 rows in 150.2s
+
+$ find_causal_chains(client, window_minutes=20)   # 263ms on the live cluster
+CausalEdge(cause_service='payments-db-primary', effect_service='payments-service', lag_seconds=135)
+CausalEdge(cause_service='payments-service',     effect_service='checkout-service', lag_seconds=55)
+
+$ pytest -m live
+1 passed, 231 deselected in 2.49s
+
+$ python3 scripts/load_generator.py --inject db_pool_exhaustion --max-ticks 12
+shutdown: 12 ticks, 48 rows inserted   (continuous-flow path verified live)
+```
+
+**CLAIM-INTEGRITY RULING (supersedes the ~250s expectation in the demo line):** the live onset-to-onset lag is **135 seconds (2m15s)** — smaller than the 250s climb-start→breach ground truth, exactly as the pre-author flagged. THE DEMO SAYS 2m15s / "precedes by 2m 15s". The 250s figure may only be described as "the pool began departing baseline ~4 minutes before the breach" if narrating the CSV ground truth separately. demo-scripts.md sync happens at Phase 9. Secondary cascade edge (payments → checkout, 55s) is a bonus talking point — a real detected cascade.
+
 ## DECISIONS
 
 | Date | Decision | Basis |
@@ -74,6 +93,7 @@ is open; idempotency keys register at receipt (durable dedupe → Phase 2).
 |---|---|---|---|---|
 | B1 | Guild.ai | `GUILD_PAT`, `GUILD_API_BASE` | guild.ai → open beta signup → `npm i @guildai/cli -g && guild auth login` (account may need a Guild contact / hackathon rep) | REST session create probe + retry `npm view` with registry auth |
 | ~~B2~~ | ~~ClickHouse Cloud~~ | **RESOLVED firing 10 (2026-06-13)** — creds in .env (host zr8in8fpga.us-west-2.aws.clickhouse.cloud), `SELECT 1` → 1 over HTTPS. All three pre-written gates ran green: replay.py --truncate-first --speed 100 (960 rows / 240 ticks), `pytest -m live` 1 passed (real payments-db-primary→payments-service causal edge asserted on the cluster), load_generator --inject db_pool_exhaustion --max-ticks 80 (320 rows, p99 breach detected t+250s after injection) | — | done |
+| ~~B2~~ | ~~ClickHouse~~ | **RESOLVED (2026-06-13)** — SELECT 1 in 2088ms (server 25.12.1, us-west-2); schema applied (events 397ms, metrics 244ms, airbyte_history 388ms); replay 960 rows/150.2s at --speed 100; causal gate PASSED; load_generator live-injected 48 rows/12 ticks | — | done |
 | ~~B3~~ | ~~Langfuse~~ | **RESOLVED firing 9 (2026-06-13)** — live span via libs/tracing @traced, confirmed by API readback: trace c0d181911da7b49e093fad9c843095e9, visible after 20s. Fix required first: tracing.py was v3-API, installed SDK is 4.7.1 (see DECISIONS + CLAUDE.md Learned Rules) | — | done |
 | B4 | Pioneer (Fastino) | `PIONEER_API_KEY` | pioneer.ai → Settings → API Keys | GLiNER2 severity-schema call, latency MEASURED; GLiGuard screen on sample text |
 | B5 | Airbyte | `AIRBYTE_CLIENT_ID`, `AIRBYTE_CLIENT_SECRET` | cloud.airbyte.com → settings → applications | workspace list + GitHub/Jira connector visibility |
@@ -98,6 +118,11 @@ Absorbed at firing 8. CHANGES TO THE PLAN:
 | Metric | Value | Command | Date |
 |---|---|---|---|
 | Langfuse first-span wall time (incl. client init; NOT a per-span figure) | 1123 ms | `@traced('b3-live-verification') probe()` via libs/tracing | 2026-06-13 |
+| ClickHouse SELECT 1 round-trip (cold client) | 2088 ms | clickhouse_connect get_client + SELECT 1 | 2026-06-13 |
+| Causal-chain query (960-row window, live cluster) | 263 ms | find_causal_chains(window_minutes=20) | 2026-06-13 |
+| **Causal lag, DB→payments (THE demo number)** | **135 s (2m15s)** | live lagInFrame onset pairing | 2026-06-13 |
+| Causal lag, payments→checkout (cascade) | 55 s | same query | 2026-06-13 |
+| Replay throughput | 960 rows / 150.2 s at --speed 100 | scripts/replay.py | 2026-06-13 |
 | Langfuse ingestion visibility lag | ~20 s | API readback poll, 5s interval | 2026-06-13 |
 
 ## Blocker age (escalation counter — louder message at 3 consecutive firings)
