@@ -20,6 +20,7 @@ out/
 .claude/
 .DS_Store
 .composio-cache/
+.playwright-mcp/
 
 # Local databases / large demo artifacts
 *.db
