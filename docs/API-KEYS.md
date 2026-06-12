@@ -10,7 +10,7 @@ Harness Engineering Hack, June 12 2026. Sources: hackathon Discord (per-sponsor 
 | 2 | Langfuse promo | ✅ **DONE 12:55 PM** — keys in `.env`, test span verified | Code `HARNESSHACK2026` "needs to be used TODAY" per ClickHouse slides | 10 min |
 | 3 | ClickHouse Cloud | ✅ **DONE 1:10 PM** — creds in `.env`, SELECT 1 verified, schema applied (events/metrics/airbyte_history) | $400 credits via QR — **QR not yet redeemed, account on 30-day trial; scan slide 9 to stack the credits** | 10 min |
 | 4 | Pioneer promo | ✅ **DONE 2:30 PM** — Pro active via promo ($0.00 invoice), GLiNER2 **134–180ms measured**, GLiGuard verified | Code `SFJune2026Tokens` = Pro plan with $1,500 inference credits; blocks GLiNER2 hot path | 10 min |
-| 5 | Render credits | ❌ | $100 claim link live now; **prize requires Render Workflows** (see below) | 5 min |
+| 5 | Render credits | ✅ **DONE 2:55 PM** — $100 promo `HTHON100-847F12` redeemed (valid → May 31 2027); CLI logged in, workspace `Charlie's workspace` set, `render whoami` ✓ | $100 claim link live now; **prize requires Render Workflows** (see below) | 5 min |
 | 6 | Senso | ❌ | Challenge requires publishing output to cited.md; $100 free tier, no CC | 10 min |
 | 7 | Guild | ✅ **DONE 1:25 PM** — PAT in `.env`, workspace `0612hack` selected, session API probed | 50M free tokens on signup, self-serve (easier than feared); REST path confirmed | 15 min |
 | 8 | Composio | ❌ | API key + browser OAuth for Slack/Jira — OAuth takes minutes, do before crunch | 15 min |
@@ -74,6 +74,8 @@ Judging: 5 criteria × 20% each — Idea, Technical Implementation, Tool Use (�
    - GLiGuard: `{"model_id": "fastino/gliguard-LLMGuardrails-300M", "text": ..., "schema": {"classifications": [{"task": "prompt_safety", "labels": ["safe","unsafe"], "multi_label": false, "threshold": 0.5}]}}` → `safe` @ 0.9998 on a sample incident update; 426ms server-side on the cold first call (wall 13.7s — warm it before the demo).
 
 ## 5. Render (CLI login, no env var) — $100 credits, 3 prizes in Render credits
+
+**Status: ✅ DONE 2:55 PM June 12.** Credits: promo `HTHON100-847F12` → $100 "Hackathon Participant" balance, valid until May 31, 2027. CLI v2.20.0 installed via brew, device-flow login approved, active workspace `Charlie's workspace` (`tea-d8m7c767r5hc73f1sb0g`), `render whoami` verified. Remaining for Phase 7: Blueprint deploy + the **Render Workflows** component for prize eligibility.
 
 1. Claim credits: **https://credits-portal-mmdm.onrender.com/claim/harness-engineering-hack**
 2. Signup: https://render.com/register?utm_source=partner&utm_medium=events&utm_campaign=2026_event_harness_hack
