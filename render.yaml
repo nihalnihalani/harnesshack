@@ -1,0 +1,62 @@
+# IncidentSherpa — Render Blueprint (CLAUDE.md deploy target).
+# Three services + a /health cron. Secrets live in Render env-var GROUPS
+# (incidentsherpa-secrets / incidentsherpa-frontend) — NEVER in this file.
+# First deploy: `render blueprint launch` (Phase 7, blocked on B9).
+
+services:
+  - type: web
+    name: webhook-api
+    runtime: python
+    plan: starter
+    buildCommand: pip install -r apps/api/requirements.txt
+    startCommand: uvicorn apps.api.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - fromGroup: incidentsherpa-secrets
+      - key: PYTHON_VERSION
+        value: 3.12.12
+
+  - type: worker
+    name: agent-worker
+    runtime: python
+    plan: starter
+    buildCommand: pip install -r apps/worker/requirements.txt
+    # Phase 1: module loads the domain model and exits; the long-running
+    # incident loop lands in Phase 3.
+    startCommand: python -m apps.worker.agent
+    autoDeploy: true
+    envVars:
+      - fromGroup: incidentsherpa-secrets
+      - key: PYTHON_VERSION
+        value: 3.12.12
+
+  - type: web
+    name: frontend
+    runtime: node
+    plan: starter
+    rootDir: apps/frontend
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start
+    autoDeploy: true
+    envVars:
+      - fromGroup: incidentsherpa-frontend
+      - key: NEXT_PUBLIC_API_BASE
+        fromService:
+          name: webhook-api
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
+
+  - type: cron
+    name: health-ping
+    runtime: python
+    plan: starter
+    schedule: "*/5 * * * *"
+    buildCommand: 'echo "no build step — curl only"'
+    startCommand: 'curl -fsS "$WEBHOOK_API_URL/health"'
+    envVars:
+      - key: WEBHOOK_API_URL
+        fromService:
+          name: webhook-api
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
