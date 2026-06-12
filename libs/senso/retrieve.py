@@ -1,20 +1,28 @@
 """Senso.ai retrieval — runbooks + ownership, ALWAYS cited.
 
-Real REST client against the same base-URL convention scripts/seed_senso.py
-uses: https://sdk.senso.ai/api/v1 (override via SENSO_BASE_URL), X-API-Key
-auth. Raises NotConfiguredError naming B6 while SENSO_API_KEY is unset.
+Real REST client against the VERIFIED-LIVE apiv2 contract (confirmed by live
+calls 2026-06-13): base URL https://apiv2.senso.ai/api/v1 (override via
+SENSO_BASE_URL), X-API-Key auth (keys are `tgr_`-prefixed — that is valid).
+Raises NotConfiguredError naming B6 while SENSO_API_KEY is unset.
 
 HARD RULE (CLAUDE.md: remove Senso -> hallucinated runbooks): a response
-without a resolvable citation/source reference raises UncitedResponseError —
-the agent REFUSES uncited knowledge. There is no uncited fallback and no
-fake document on any path.
+without a resolvable citation/source raises UncitedResponseError — the agent
+REFUSES uncited knowledge. There is no uncited fallback and no fake document
+on any path.
 
-ON-SITE CONFIRMATION REQUIRED (B6): Senso's docs are sign-in gated
-(sponsors.md). The search endpoint below follows their published REST
-conventions (seed_senso.py already pins POST /content/raw for ingestion);
-`parse_search_response` is tolerant about container/field spelling but fails
-loudly (UnexpectedResponseShapeError / UncitedResponseError) on anything it
-cannot resolve. Confirm /search request+response shapes the moment B6 lands.
+VERIFIED-LIVE SEARCH CONTRACT:
+    POST /org/search  body {"query": <str>, "max_results": <int optional>}
+    -> {"query":..., "answer":"<AI-synthesized grounded answer>",
+        "results":[{content_id, version_id, chunk_index, chunk_text, score,
+                    rank, title, vector_id, source_type, content_type}],
+        "total_results":<int>, "max_results":<int>, "processing_time_ms":<int>}
+    No match -> answer="No results found for your query.", results=[],
+    total_results=0.
+
+We prefer `answer` (the grounded synthesis) as the document content and derive
+the citation/source from results[0] (title + content_id). total_results==0 /
+empty results -> NoDocumentFoundError (honest empty); an answer with NO result
+to cite -> UncitedResponseError (never return uncited knowledge).
 """
 
 from __future__ import annotations
@@ -33,14 +41,12 @@ from libs.tracing import call_traced
 
 logger = logging.getLogger("incidentsherpa.senso")
 
-DEFAULT_BASE_URL = "https://sdk.senso.ai/api/v1"
-SEARCH_PATH = "/search"
-_TIMEOUT_SECONDS = 30.0
+DEFAULT_BASE_URL = "https://apiv2.senso.ai/api/v1"
+SEARCH_PATH = "/org/search"
+_TIMEOUT_SECONDS = 60.0
 
-_RESULTS_KEYS = ("results", "matches", "documents", "hits", "answers", "data")
-_CONTENT_KEYS = ("text", "content", "chunk", "answer", "summary")
-_SOURCE_ID_KEYS = ("source_id", "content_id", "document_id", "id")
-_CITATION_KEYS = ("citation", "source", "title", "reference")
+# The grounded-synthesis answer Senso returns when the KB has no match.
+_NO_MATCH_ANSWER = "No results found for your query."
 
 
 class UncitedResponseError(RuntimeError):
@@ -86,70 +92,85 @@ def base_url() -> str:
 
 
 def build_search_request(query: str, max_results: int = 3) -> dict[str, Any]:
-    """Build the search request body (shape flagged for on-site confirmation, B6)."""
+    """Build the VERIFIED-LIVE /org/search request body."""
     return {"query": query, "max_results": max_results}
 
 
-def _first_result(data: Any) -> dict[str, Any]:
-    candidates: list[Any] = []
-    if isinstance(data, dict):
-        candidates.extend(data.get(key) for key in _RESULTS_KEYS)
-        candidates.append(data)  # single-answer shape: {"answer": ..., "source": ...}
-    elif isinstance(data, list):
-        candidates.append(data)
-    for candidate in candidates:
-        if isinstance(candidate, list):
-            if not candidate:
-                raise NoDocumentFoundError(
-                    "Senso search returned zero documents for this query — "
-                    "seed the knowledge base (scripts/seed_senso.py) or broaden the query"
-                )
-            candidate = candidate[0]
-        if isinstance(candidate, dict) and any(key in candidate for key in _CONTENT_KEYS):
-            return candidate
-    raise UnexpectedResponseShapeError(
-        "Senso search response has no resolvable results container — confirm the "
-        f"live /search shape when B6 lands (got: {str(data)[:300]!r})"
-    )
-
-
 def parse_search_response(data: Any) -> CitedDocument:
-    """Parse the top search result into a CitedDocument.
+    """Parse a VERIFIED-LIVE /org/search response into a CitedDocument.
 
-    HARD RULE: content without a resolvable citation/source reference raises
-    UncitedResponseError — never returned, never defaulted.
+    Prefers `answer` (the AI-synthesized grounded answer) as the content and
+    derives the citation/source from results[0] (title + content_id).
+
+    HARD RULES:
+    - total_results == 0 / empty results -> NoDocumentFoundError (honest empty).
+    - an answer exists but there is NO result/source to cite ->
+      UncitedResponseError (the agent refuses uncited knowledge).
     """
-    result = _first_result(data)
-    content = next(
-        (result[key] for key in _CONTENT_KEYS if isinstance(result.get(key), str)), None
-    )
+    if not isinstance(data, dict):
+        raise UnexpectedResponseShapeError(
+            "Senso /org/search returned a non-object response — "
+            f"expected a JSON object (got: {str(data)[:300]!r})"
+        )
+
+    results = data.get("results")
+    total_results = data.get("total_results")
+    answer = data.get("answer")
+
+    if results is None or "answer" not in data:
+        raise UnexpectedResponseShapeError(
+            "Senso /org/search response missing 'answer'/'results' — "
+            f"got keys {sorted(data)!r} (confirm the apiv2 contract)"
+        )
+
+    # Honest empty: no documents matched (explicit count OR the no-match answer).
+    if not results or total_results == 0 or answer == _NO_MATCH_ANSWER:
+        raise NoDocumentFoundError(
+            "Senso search returned zero documents for this query — "
+            "seed the knowledge base (scripts/seed_senso.py) or broaden the query"
+        )
+
+    if not isinstance(results, list) or not isinstance(results[0], dict):
+        raise UnexpectedResponseShapeError(
+            "Senso /org/search 'results' is not a list of objects — "
+            f"got {str(results)[:300]!r}"
+        )
+
+    top = results[0]
+    content_id = top.get("content_id")
+    title = top.get("title")
+
+    # Content: prefer the grounded synthesized answer; fall back to the top
+    # chunk_text only if the answer is missing (never invent content).
+    content = answer if isinstance(answer, str) and answer.strip() else None
+    if content is None:
+        chunk = top.get("chunk_text")
+        content = chunk if isinstance(chunk, str) and chunk.strip() else None
     if not content:
         raise UnexpectedResponseShapeError(
-            f"Senso result has no resolvable content field — got keys {sorted(result)!r}; "
-            "confirm the live /search shape when B6 lands"
+            "Senso /org/search returned a result with no resolvable content "
+            f"(no 'answer' and no 'chunk_text') — got result keys {sorted(top)!r}"
         )
-    source_id = next(
-        (result[key] for key in _SOURCE_ID_KEYS if result.get(key) not in (None, "")), None
-    )
-    citation = next(
-        (
-            result[key]
-            for key in _CITATION_KEYS
-            if isinstance(result.get(key), str) and result[key].strip()
-        ),
-        None,
-    )
-    if source_id is None and citation is None:
+
+    # Provenance: derive from results[0]. Without it we cannot cite -> refuse.
+    if content_id in (None, "") and (not isinstance(title, str) or not title.strip()):
         raise UncitedResponseError(
-            "Senso returned content WITHOUT a resolvable citation/source reference "
-            f"(looked for {_SOURCE_ID_KEYS + _CITATION_KEYS}) — the agent refuses "
+            "Senso returned an answer WITHOUT a resolvable citation/source "
+            "(results[0] has neither content_id nor title) — the agent refuses "
             "uncited knowledge"
         )
-    return CitedDocument(
-        content=content,
-        citation=citation or f"senso:{source_id}",
-        source_id=str(source_id) if source_id is not None else f"citation:{citation}",
-    )
+
+    title_str = title.strip() if isinstance(title, str) and title.strip() else None
+    if title_str and content_id:
+        citation = f"{title_str} ({content_id})"
+    elif title_str:
+        citation = title_str
+    else:
+        citation = f"senso:{content_id}"
+
+    source_id = str(content_id) if content_id not in (None, "") else f"citation:{title_str}"
+
+    return CitedDocument(content=content, citation=citation, source_id=source_id)
 
 
 def _search(query: str, span_name: str) -> CitedDocument:
