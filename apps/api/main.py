@@ -18,13 +18,17 @@ import asyncio
 import hashlib
 import json
 import logging
+import math
 import os
+import secrets
+import time
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Annotated, Any
 
 from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from apps.worker.agent import IllegalTransitionError, IncidentAgent, TypedEvent
@@ -43,7 +47,25 @@ from libs.logging_config import configure_logging
 configure_logging()
 logger = logging.getLogger("incidentsherpa.api")
 
-app = FastAPI(title="IncidentSherpa webhook API", version="0.1.0")
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    if not os.environ.get("WEBHOOK_AUTH_TOKEN", "").strip():
+        # Loud, structured, and explicit: local dev works keyless, but a
+        # production deploy must opt in to that state knowingly.
+        logger.warning(
+            "webhook auth DISABLED — set WEBHOOK_AUTH_TOKEN in production",
+            extra={"security": "webhook_auth", "enabled": False},
+        )
+    else:
+        logger.info(
+            "webhook auth enabled — POST /trigger and /incidents/* require a bearer token",
+            extra={"security": "webhook_auth", "enabled": True},
+        )
+    yield
+
+
+app = FastAPI(title="IncidentSherpa webhook API", version="0.1.0", lifespan=_lifespan)
 
 # Browser clients (the Next.js timeline) consume /events via EventSource and
 # POST resolve/confirm cross-origin; without CORS headers the browser blocks
@@ -55,6 +77,112 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# --------------------------------------------------------------------------
+# Webhook security — bearer auth (when WEBHOOK_AUTH_TOKEN is set) and a
+# per-IP token bucket on the mutating POST endpoints.
+# --------------------------------------------------------------------------
+
+DEFAULT_RATE_LIMIT_PER_MINUTE = 60
+
+
+def _rate_limit_per_minute() -> int:
+    """RATE_LIMIT_PER_MINUTE env (read per request so ops can tune live)."""
+    raw = os.environ.get("RATE_LIMIT_PER_MINUTE", "").strip()
+    try:
+        value = int(raw) if raw else DEFAULT_RATE_LIMIT_PER_MINUTE
+    except ValueError:
+        logger.warning(
+            "invalid RATE_LIMIT_PER_MINUTE — falling back to default",
+            extra={"raw_value": raw, "default": DEFAULT_RATE_LIMIT_PER_MINUTE},
+        )
+        return DEFAULT_RATE_LIMIT_PER_MINUTE
+    return max(1, value)
+
+
+class TokenBucketRateLimiter:
+    """In-process per-IP token bucket: capacity == refill == limit/minute.
+
+    Per-process by design (one Render instance per service); a shared store
+    is a later-phase concern and would be a new dependency (CLAUDE.md:
+    simplicity first).
+    """
+
+    def __init__(self) -> None:
+        self._buckets: dict[str, tuple[float, float]] = {}  # ip -> (tokens, last_ts)
+
+    def acquire(self, ip: str, limit_per_minute: int, now: float | None = None) -> float | None:
+        """Take one token for `ip`. None = allowed; float = Retry-After secs."""
+        if now is None:
+            now = time.monotonic()
+        refill_per_second = limit_per_minute / 60.0
+        tokens, last_ts = self._buckets.get(ip, (float(limit_per_minute), now))
+        tokens = min(float(limit_per_minute), tokens + (now - last_ts) * refill_per_second)
+        if tokens >= 1.0:
+            self._buckets[ip] = (tokens - 1.0, now)
+            return None
+        self._buckets[ip] = (tokens, now)
+        return (1.0 - tokens) / refill_per_second
+
+    def reset(self) -> None:
+        self._buckets.clear()
+
+
+_rate_limiter = TokenBucketRateLimiter()
+
+
+def _is_protected(request: Request) -> bool:
+    """POST /trigger and POST /incidents/* mutate state — they are protected."""
+    if request.method != "POST":
+        return False
+    path = request.url.path
+    return path == "/trigger" or path.startswith("/incidents/")
+
+
+@app.middleware("http")
+async def webhook_security(request: Request, call_next: Any) -> Any:
+    if not _is_protected(request):
+        return await call_next(request)
+
+    # 1) Bearer auth — enforced only when WEBHOOK_AUTH_TOKEN is set (the
+    #    keyless local-dev state is announced loudly at startup instead).
+    expected_token = os.environ.get("WEBHOOK_AUTH_TOKEN", "").strip()
+    if expected_token:
+        supplied = request.headers.get("Authorization", "")
+        expected = f"Bearer {expected_token}"
+        if not secrets.compare_digest(supplied.encode("utf-8"), expected.encode("utf-8")):
+            logger.warning(
+                "rejected unauthenticated request",
+                extra={"path": request.url.path, "security": "webhook_auth"},
+            )
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "missing or invalid bearer token"},
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+    # 2) Per-IP token bucket.
+    client_ip = request.client.host if request.client else "unknown"
+    retry_after = _rate_limiter.acquire(client_ip, _rate_limit_per_minute())
+    if retry_after is not None:
+        retry_after_seconds = max(1, math.ceil(retry_after))
+        logger.warning(
+            "rate limit exceeded",
+            extra={
+                "path": request.url.path,
+                "client_ip": client_ip,
+                "retry_after_seconds": retry_after_seconds,
+                "security": "rate_limit",
+            },
+        )
+        return JSONResponse(
+            status_code=429,
+            content={"detail": "rate limit exceeded — retry later"},
+            headers={"Retry-After": str(retry_after_seconds)},
+        )
+
+    return await call_next(request)
 
 
 # --------------------------------------------------------------------------

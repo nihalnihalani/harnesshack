@@ -29,13 +29,15 @@ def unconfigured_env(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyP
     if request.node.get_closest_marker("live"):
         yield
         return
-    for var in ALL_CREDENTIAL_ENV_VARS:
+    for var in ALL_CREDENTIAL_ENV_VARS + ["WEBHOOK_AUTH_TOKEN", "RATE_LIMIT_PER_MINUTE"]:
         monkeypatch.delenv(var, raising=False)
     api_main._seen_keys.clear()
     api_main._agents.clear()
+    api_main._rate_limiter.reset()
     yield
     api_main._seen_keys.clear()
     api_main._agents.clear()
+    api_main._rate_limiter.reset()
 
 
 @pytest.fixture()
