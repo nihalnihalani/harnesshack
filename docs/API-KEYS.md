@@ -8,7 +8,7 @@ Harness Engineering Hack, June 12 2026. Sources: hackathon Discord (per-sponsor 
 |---|---|---|---|---|
 | 1 | Anthropic credits | ⏳ form submitted ~12:45 PM, awaiting email | Signup links EXPIRED 12:00 PM PT — escalate via #anthropic rep if no reply by ~1:15 | 5 min + wait |
 | 2 | Langfuse promo | ✅ **DONE 12:55 PM** — keys in `.env`, test span verified | Code `HARNESSHACK2026` "needs to be used TODAY" per ClickHouse slides | 10 min |
-| 3 | ClickHouse Cloud | 🔶 service `0612hack` live (us-west-2); host+user in `.env`, password pending | $400 credits via QR; core of the architecture (events, causal SQL); blocks Phase 2 | 10 min |
+| 3 | ClickHouse Cloud | ✅ **DONE 1:10 PM** — creds in `.env`, SELECT 1 verified, schema applied (events/metrics/airbyte_history) | $400 credits via QR — **QR not yet redeemed, account on 30-day trial; scan slide 9 to stack the credits** | 10 min |
 | 4 | Pioneer promo | ❌ | Code `SFJune2026Tokens` = Pro plan with $1,500 inference credits; blocks GLiNER2 hot path | 10 min |
 | 5 | Render credits | ❌ | $100 claim link live now; **prize requires Render Workflows** (see below) | 5 min |
 | 6 | Senso | ❌ | Challenge requires publishing output to cited.md; $100 free tier, no CC | 10 min |
@@ -50,6 +50,8 @@ Judging: 5 criteria × 20% each — Idea, Technical Implementation, Tool Use (�
 5. SDK heads-up (v4.7.1, installed in `.venv`): span helper is `start_as_current_observation(name=..., as_type="span")` — `start_as_current_span` does NOT exist in v4.
 
 ## 3. ClickHouse Cloud (`CLICKHOUSE_HOST/USER/PASSWORD`) — $400 credits
+
+**Status: ✅ DONE 1:10 PM June 12.** Service `0612hack`, AWS us-west-2, user `default`, creds in `.env` (password ends in a literal `.` — it's part of the password). Verified via curl AND `clickhouse_connect`; all three tables from `libs/clickhouse/schema.py` applied. Account is on the 30-day trial — the $400 QR credits (slide 9 of the PDF) have NOT been redeemed yet.
 
 1. **$400 total credits via the QR code on slide 9 of `AI Hackathon 2026.pdf`** (in Downloads; scan with phone).
 2. **Use a NEW email / fresh account** — slide explicitly says past cloud accounts don't get credits. GitHub account required for the OSS path.
