@@ -3,15 +3,15 @@
 > Handoff memory between loop firings. Cold readers: read CLAUDE.md first for project law.
 > Loop: cron job `459218a5`, every 20 min. Started 2026-06-12.
 
-**Current phase: 0 (blocked on credentials) → Phase 1 scaffold in progress under the never-idle guardrail.**
+**Current phase: 2 (blocked on B2 ClickHouse) — next firing re-tests blockers.**
 
 ## Phase checklist
 
 | Phase | Status | Gate evidence |
 |---|---|---|
 | 0 — Preflight & credential gates | **PARTIAL — all 9 services blocked on human signup** (see BLOCKERS); credential-free probes done | Guild SDK probe + runtime checks below |
-| 1 — Scaffold + CI | IN PROGRESS (credential-free, allowed while P0 blocked) | — |
-| 2 — ClickHouse schema + live ingestion | not started (needs CLICKHOUSE_*) | — |
+| 1 — Scaffold + CI | **COMPLETE (2026-06-12)** | Gate outputs below (pytest 29 green, next build clean, CI run pass) |
+| 2 — ClickHouse schema + live ingestion | not started (needs CLICKHOUSE_*); DDL strings already in libs/clickhouse/schema.py | — |
 | 3 — Agent core | not started (needs GUILD_PAT, PIONEER_API_KEY, SENSO_API_KEY, ANTHROPIC_API_KEY) | — |
 | 4 — Live actions | not started (needs COMPOSIO_API_KEY + Slack/Jira OAuth) | — |
 | 5 — Airbyte data layer | not started (needs AIRBYTE_CLIENT_ID/SECRET) | — |
@@ -33,10 +33,38 @@ $ node --version        → v25.2.1 ✅
 $ cp -n .env.example .env → created; 13 empty credential slots
 ```
 
+## Phase 1 — gate outputs (2026-06-12)
+
+```
+$ pytest
+29 passed, 1 warning in 0.04s
+
+$ cd apps/frontend && npm run build
+✓ Compiled successfully in 1013.6ms      (Next.js 16.1.6, Turbopack; routes / and /_not-found prerendered static)
+
+$ gh run list --limit 1
+completed  success  fix(frontend): regenerate package-lock — npm ci failed in CI on missi…  CI  main  push  27433963394  44s  2026-06-12T18:07:10Z
+  (jobs: "ruff + pytest" success, "next build" success)
+```
+
+CI note: first CI run (27433870656) failed in the frontend job — `npm ci` hit a
+package-lock missing optional `@emnapi/*` entries (npm lockfile-desync bug with
+platform-optional deps). Fixed by full lockfile regeneration (commit 9956a18);
+python job (ruff+pytest) passed on every run.
+
+What shipped: apps/api (POST /trigger idempotent ingest, GET /events SSE,
+GET /health per-dep configured/blocked), apps/worker (TypedEvent + strict
+state machine), libs (tracing, clickhouse DDL+record_event, 5 honest
+NotConfiguredError sponsor factories), apps/frontend (OpenUI scaffold + live
+SSE list), render.yaml (3 services + health cron, env-group refs only),
+tests/ (29), .github/workflows/ci.yml. /trigger returns honest 503 while B2
+is open; idempotency keys register at receipt (durable dedupe → Phase 2).
+
 ## DECISIONS
 
 | Date | Decision | Basis |
 |---|---|---|
+| 2026-06-12 | **Frontend scaffold = OpenUI CLI primary path** — `cd apps && npx @openuidev/cli@latest create --name frontend` succeeded on attempt 1 (no create-next-app fallback needed). Removed the template's OpenAI chat route (`src/app/api/chat`) + `openai` dep: wrong provider for this stack (Claude only) and `new OpenAI()` at module scope breaks keyless builds. Kept `@openuidev/react-{lang,headless,ui}` for Phase 6 components. | CLI output; CLAUDE.md architecture (Claude-only reasoning LLM) |
 | 2026-06-12 | **Guild path = REST descope (primary).** `@guildai/agents-sdk` lives on Guild's PRIVATE npm registry (app.guild.ai/npm, 401 without auth) — not public npm. libs/guild will be built REST-first per CLAUDE.md's descope spec. If a Guild PAT later grants registry access, SDK becomes an optional upgrade, not a rewrite. | `npm view` 401 output above |
 | 2026-06-12 | Phase 1 scaffold proceeds during Phase 0 blockage per the never-idle guardrail (scaffold needs no credentials). | Loop guardrails |
 
