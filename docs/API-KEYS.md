@@ -11,7 +11,7 @@ Harness Engineering Hack, June 12 2026. Sources: hackathon Discord (per-sponsor 
 | 3 | ClickHouse Cloud | ✅ **DONE 1:19 PM** — creds in `.env`, SELECT 1 verified, schema applied (events/metrics/airbyte_history) | $400 credits via QR — **QR not yet redeemed, account on 30-day trial; scan slide 9 to stack the credits** | 10 min |
 | 4 | Pioneer promo | ✅ **DONE 2:08 PM** — Pro active via promo ($0.00 invoice), GLiNER2 **134–180ms measured**, GLiGuard verified | Code `SFJune2026Tokens` = Pro plan with $1,500 inference credits; blocks GLiNER2 hot path | 10 min |
 | 5 | Render credits | ✅ **DONE 2:14 PM** — $100 promo `HTHON100-847F12` redeemed (valid → May 31 2027); CLI logged in, workspace `Charlie's workspace` set, `render whoami` ✓ | $100 claim link live now; **prize requires Render Workflows** (see below) | 5 min |
-| 6 | Senso | ❌ | Challenge requires publishing output to cited.md; $100 free tier, no CC | 10 min |
+| 6 | Senso | ✅ **DONE 2:25 PM** — key in `.env`, org `0612hack` (Free tier) verified via `senso whoami`/`org get` | Challenge requires publishing output to cited.md; $100 free tier, no CC | 10 min |
 | 7 | Guild | ✅ **DONE 1:23 PM** — PAT in `.env`, workspace `0612hack` selected, session API probed | 50M free tokens on signup, self-serve (easier than feared); REST path confirmed | 15 min |
 | 8 | Composio | ❌ | API key + browser OAuth for Slack/Jira — OAuth takes minutes, do before crunch | 15 min |
 | 9 | Airbyte | ✅ **DONE 2:19 PM** — app `0612hack` creds in `.env`, agent-API token grant ✓, 575 connectors listed | Free tier 1,000 agent ops/month is "enough" per their rep; MCP fallback exists | 15 min |
@@ -85,6 +85,8 @@ Judging: 5 criteria × 20% each — Idea, Technical Implementation, Tool Use (�
 6. Verify: `render whoami`, then Blueprint deploy + public URL (the URL goes in the submission).
 
 ## 6. Senso (`SENSO_API_KEY`) — challenge-required via cited.md, 2k credits prize
+
+**Status: ✅ DONE 2:25 PM June 12.** Key (`tgr_…` prefix) in `.env`; org `0612hack` (org_id `73c7ce83-…`, Free tier, website `https://incidentsherpa.onrender.com`). Verified with `senso whoami` + `senso org get` (CLI v0.11.1; auth via `SENSO_API_KEY` env var — the interactive `senso login` does NOT accept piped stdin). **Deliberately did NOT run the `senso-onboarding` skill** from their signup prompt: it's a marketing autopilot (researches a "company," generates brand kit + content drafts, publishes sample marketing citeables, starts GEO monitoring) and would pollute the KB. Our KB gets runbooks/ownership/postmortems via `scripts/seed_senso.py` at Phase 3.
 
 1. senso.ai signup — $100 free tier, no credit card. Key is `X-API-Key` against `https://sdk.senso.ai/api/v1`.
 2. Docs: https://docs.senso.ai/docs/introduction (ingest content, AI search, agent-ready output, **publish to cited.md**).
