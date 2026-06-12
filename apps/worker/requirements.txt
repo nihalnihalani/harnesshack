@@ -1,0 +1,4 @@
+# Incident agent worker — Phase 1 deps (libs.tracing + libs.clickhouse).
+# Phase 3 adds: composio, httpx (Guild/Pioneer/Senso REST), anthropic.
+clickhouse-connect>=0.8
+langfuse>=3.0
