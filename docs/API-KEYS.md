@@ -8,7 +8,7 @@ Harness Engineering Hack, June 12 2026. Sources: hackathon Discord (per-sponsor 
 |---|---|---|---|---|
 | 1 | Anthropic credits | ⏳ form submitted ~12:45 PM, awaiting email | Signup links EXPIRED 12:00 PM PT — escalate via #anthropic rep if no reply by ~1:15 | 5 min + wait |
 | 2 | Langfuse promo | ✅ **DONE 12:55 PM** — keys in `.env`, test span verified | Code `HARNESSHACK2026` "needs to be used TODAY" per ClickHouse slides | 10 min |
-| 3 | ClickHouse Cloud | ❌ | $400 credits via QR; core of the architecture (events, causal SQL); blocks Phase 2 | 10 min |
+| 3 | ClickHouse Cloud | 🔶 service `0612hack` live (us-west-2); host+user in `.env`, password pending | $400 credits via QR; core of the architecture (events, causal SQL); blocks Phase 2 | 10 min |
 | 4 | Pioneer promo | ❌ | Code `SFJune2026Tokens` = Pro plan with $1,500 inference credits; blocks GLiNER2 hot path | 10 min |
 | 5 | Render credits | ❌ | $100 claim link live now; **prize requires Render Workflows** (see below) | 5 min |
 | 6 | Senso | ❌ | Challenge requires publishing output to cited.md; $100 free tier, no CC | 10 min |
