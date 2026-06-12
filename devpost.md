@@ -18,32 +18,7 @@ IncidentSherpa sits as a persistent agent watching a live P0 incident:
 
 ### Architecture Diagram
 
-```mermaid
-graph TD
-    Alert[Alert Ingest POST /trigger] --> GLiNER[Pioneer GLiNER2<br/>Severity/Blast Radius]
-    GLiNER --> Agent[IncidentAgent<br/>Python State Machine]
-    
-    subgraph Data & Analytics
-        Agent --> Airbyte[Airbyte Context Store<br/>Semantic query for PRs/Jira]
-        Agent --> CH_LagLead[ClickHouse Cloud<br/>LAG/LEAD Causal SQL]
-        Agent --> Senso[Senso.ai<br/>Runbooks & Ownership]
-    end
-    
-    subgraph Actions & Control Plane
-        Agent --> Guild[Guild.ai<br/>Persistent Session & Audit Log]
-        Agent --> GLiGuard[Pioneer GLiGuard<br/>Outbound Text Screen]
-        GLiGuard --> Composio[Composio<br/>Slack Updates & Jira Tickets]
-    end
-    
-    subgraph Frontend & Output
-        Agent --> Claude[Claude Fable<br/>Postmortem Generation]
-        Claude --> OpenUI[Next.js + OpenUI<br/>Timeline & Streaming Panel]
-    end
-    
-    subgraph Observability
-        Langfuse[Langfuse<br/>Traces every LLM & API call]
-    end
-```
+![Architecture Diagram](https://mermaid.ink/img/pako:eNqFU8tu2zAQ_JWFDr20iYEeiyKAayeOCyVWLeckG8VKXMtsKNLlI60Q5N-7pGTUBwPRYcXXzuzOkK9ZYwRlXyBrLR4PsJlvNfA3VWR9lSIsdUvOQ7EqNzDxVrYt2R1cXd3AIpePt-uqkEYT2XH6-WttJzclvZCVvp98U8jJaxQyuN0APpxLCNOWtK-WupGCB2mW0oveH4yG0qMneMDmIDWN2UN0oR4qnqNH-ABTjar3snHDduohog0s0ta9p2r8w8xoT389wxtLY7kdak6H34FsD3tjoVi7yXdpcXcJcXb_M8c2JxTVTMnm-d4Ex7jKBJHw8ulikt9O5zDD4FBB-SO_iFOSdqZK8RplSl0HXRvz7Lip1R9N1h3kccwlLS5qMG08WxAzYmfWKCgUarpEuAhSiSrFE2HBHNL5eKIk5xgp6hmE9JCb9mLZ7OAioBXn1qeFBLgKvjZBC9gkkRtLpM9gTmcHIU13NMxZnQaDHQqbZ3g6CrY_thV9gA3rTN69o8WdjeYyOcsX_DH4i_YpDIKq4Qd3WKvhGhTG-c5YTx0siLXHqOtZ6WNChFgdST8tq0du8fqXg4_jQoLZyI4U31iuofSWsJO6hYIdUe8Uv6od2RespeKn8582R93u-YJVp8HAYrFhdeJD6yHPH6JrxRIaVGc02SfIOrIdShFf-es28wfqaMuTbSZoj0H5bfYWj2Hwpux1w1veBuKVkAyYS-TqunH57R8_9FsM)
 
 ### Technology Stack & Sponsors
 - **Guild.ai (Control Plane):** Manages the persistent session, credential scoping for Slack/Jira, and an append-only audit trail of every state transition. 
