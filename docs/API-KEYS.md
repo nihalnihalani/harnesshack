@@ -4,20 +4,20 @@ Harness Engineering Hack, June 12 2026. Sources: hackathon Discord (per-sponsor 
 
 ## Priority order (do top to bottom)
 
-| # | Service | Why this rank | Time |
-|---|---|---|---|
-| 1 | Anthropic credits | Signup links EXPIRED 12:00 PM PT — needs human escalation NOW (latency is out of our control) | 5 min + wait |
-| 2 | Langfuse promo | Code `HARNESSHACK2026` "needs to be used TODAY" per ClickHouse slides | 10 min |
-| 3 | ClickHouse Cloud | $400 credits via QR; core of the architecture (events, causal SQL); blocks Phase 2 | 10 min |
-| 4 | Pioneer promo | Code `SFJune2026Tokens` = Pro plan with $1,500 inference credits; blocks GLiNER2 hot path | 10 min |
-| 5 | Render credits | $100 claim link live now; **prize requires Render Workflows** (see below) | 5 min |
-| 6 | Senso | Challenge requires publishing output to cited.md; $100 free tier, no CC | 10 min |
-| 7 | Guild | 50M free tokens on signup, self-serve (easier than feared); REST path confirmed | 15 min |
-| 8 | Composio | API key + browser OAuth for Slack/Jira — OAuth takes minutes, do before crunch | 15 min |
-| 9 | Airbyte | Free tier 1,000 agent ops/month is "enough" per their rep; MCP fallback exists | 15 min |
-| — | OpenUI | NO API key needed (BYO LLM key) | 0 |
-| — | TrueFoundry | Free to use; only if we add it — not in current architecture | 15 min |
-| — | Jua | SKIP — no prize, forces paid subscription | — |
+| # | Service | Status | Why this rank | Time |
+|---|---|---|---|---|
+| 1 | Anthropic credits | ⏳ form submitted ~12:45 PM, awaiting email | Signup links EXPIRED 12:00 PM PT — escalate via #anthropic rep if no reply by ~1:15 | 5 min + wait |
+| 2 | Langfuse promo | ✅ **DONE 12:55 PM** — keys in `.env`, test span verified | Code `HARNESSHACK2026` "needs to be used TODAY" per ClickHouse slides | 10 min |
+| 3 | ClickHouse Cloud | ❌ | $400 credits via QR; core of the architecture (events, causal SQL); blocks Phase 2 | 10 min |
+| 4 | Pioneer promo | ❌ | Code `SFJune2026Tokens` = Pro plan with $1,500 inference credits; blocks GLiNER2 hot path | 10 min |
+| 5 | Render credits | ❌ | $100 claim link live now; **prize requires Render Workflows** (see below) | 5 min |
+| 6 | Senso | ❌ | Challenge requires publishing output to cited.md; $100 free tier, no CC | 10 min |
+| 7 | Guild | ❌ | 50M free tokens on signup, self-serve (easier than feared); REST path confirmed | 15 min |
+| 8 | Composio | ❌ | API key + browser OAuth for Slack/Jira — OAuth takes minutes, do before crunch | 15 min |
+| 9 | Airbyte | ❌ | Free tier 1,000 agent ops/month is "enough" per their rep; MCP fallback exists | 15 min |
+| — | OpenUI | n/a | NO API key needed (BYO LLM key) | 0 |
+| — | TrueFoundry | skip | Free to use; only if we add it — not in current architecture | 15 min |
+| — | Jua | skip | SKIP — no prize, forces paid subscription | — |
 
 ## Submission requirements (deadline 4:30 PM PDT, harness-hack.devpost.com)
 
@@ -31,6 +31,8 @@ Judging: 5 criteria × 20% each — Idea, Technical Implementation, Tool Use (�
 
 ## 1. Anthropic (`ANTHROPIC_API_KEY`) — ~$35 credits
 
+**Status: ⏳ form submitted ~12:45 PM June 12, no email yet.** If nothing by ~1:15 PM, ping **bruh-moment** in #anthropic and email gagan@anthropic.com in parallel. Backup: Nihal's credits were approved at 11:54 AM — a key from his Console unblocks the app meanwhile.
+
 1. Form: https://forms.gle/gNGK5EBDYymUWxaGA → single-use claude.com/offers link emailed to the Google account you submit with. One link per person. **Links expired June 12, 12:00 PM PT.**
 2. If expired/rejected: ping the Anthropic rep **bruh-moment** in #anthropic (he approved a rejected request in ~2 min at 11:54 AM) or email **gagan@anthropic.com**.
 3. Rejection pitfalls: must provide a **Claude Console Organization ID** (console.anthropic.com → Settings), NOT a claude.ai account; use a company email if possible.
@@ -39,10 +41,13 @@ Judging: 5 criteria × 20% each — Idea, Technical Implementation, Tool Use (�
 
 ## 2. Langfuse (`LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY`) — prize now $500
 
+**Status: ✅ DONE 12:55 PM June 12.** Project `0612hack` (Hobby plan) on charlie.gillet1@gmail.com; keys in `.env` (`LANGFUSE_HOST` + `LANGFUSE_BASE_URL` both set); `auth_check()` passed and a test span was emitted + flushed (trace `2c9acb03653ec591c8f4adf6c5b163d3`). NOT yet on paid tier — the `HARNESSHACK2026` promo applies only at Langfuse Core checkout (today-only); Hobby suffices for tracing and the prize, upgrade optional.
+
 1. Promo code **`HARNESSHACK2026`** at the Langfuse Core subscription checkout (paid tier, unlimited seats) — ClickHouse slides say it **must be used today**.
 2. cloud.langfuse.com → new org/project → Settings → API keys. `LANGFUSE_HOST=https://cloud.langfuse.com`.
 3. "Most impressive use of Langfuse" prize was raised from $350 to **$500** (Andy Tran, 11:20 AM).
 4. Verify: one test span visible in the dashboard (`libs/tracing.py` already wired).
+5. SDK heads-up (v4.7.1, installed in `.venv`): span helper is `start_as_current_observation(name=..., as_type="span")` — `start_as_current_span` does NOT exist in v4.
 
 ## 3. ClickHouse Cloud (`CLICKHOUSE_HOST/USER/PASSWORD`) — $400 credits
 
