@@ -14,7 +14,7 @@ Harness Engineering Hack, June 12 2026. Sources: hackathon Discord (per-sponsor 
 | 6 | Senso | ❌ | Challenge requires publishing output to cited.md; $100 free tier, no CC | 10 min |
 | 7 | Guild | ✅ **DONE 1:23 PM** — PAT in `.env`, workspace `0612hack` selected, session API probed | 50M free tokens on signup, self-serve (easier than feared); REST path confirmed | 15 min |
 | 8 | Composio | ❌ | API key + browser OAuth for Slack/Jira — OAuth takes minutes, do before crunch | 15 min |
-| 9 | Airbyte | ❌ | Free tier 1,000 agent ops/month is "enough" per their rep; MCP fallback exists | 15 min |
+| 9 | Airbyte | ✅ **DONE 2:19 PM** — app `0612hack` creds in `.env`, agent-API token grant ✓, 575 connectors listed | Free tier 1,000 agent ops/month is "enough" per their rep; MCP fallback exists | 15 min |
 | — | OpenUI | n/a | NO API key needed (BYO LLM key) | 0 |
 | — | TrueFoundry | skip | Free to use; only if we add it — not in current architecture | 15 min |
 | — | Jua | skip | SKIP — no prize, forces paid subscription | — |
@@ -108,6 +108,8 @@ Judging: 5 criteria × 20% each — Idea, Technical Implementation, Tool Use (�
 3. Verify: link() status for both apps.
 
 ## 9. Airbyte (`AIRBYTE_CLIENT_ID/SECRET`) — $1,750 track
+
+**Status: ✅ DONE 2:19 PM June 12.** Application `0612hack` (user-level settings, NOT workspace settings — cloud.airbyte.com/settings/applications). Verified: token grant at `POST https://api.airbyte.ai/api/v1/account/applications/token` (the **Agent-Engine** API host — note the `.ai` TLD; `api.airbyte.com/v1/applications/token_grant` 401s for these app creds, and the Keycloak endpoint at cloud.airbyte.com also works) → authenticated `GET /api/v1/integrations/definitions/sources` returned 575 connectors. The dashboard "Generate access token" button is unnecessary — tokens are minted programmatically from the ID+secret.
 
 1. Free tier: **1,000 Agent Operations/month — "should be enough"** per rep Richelle; connectors are NOT tier-gated.
 2. cloud.airbyte.com → Settings → Applications → client ID + secret.
