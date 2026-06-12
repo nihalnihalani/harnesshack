@@ -18,7 +18,32 @@ IncidentSherpa sits as a persistent agent watching a live P0 incident:
 
 ### Architecture Diagram
 
-![Architecture Diagram](https://mermaid.ink/img/Z3JhcGggVEIKICAgIHN1YmdyYXBoIEluZnJhc3RydWN0dXJlCiAgICAgICAgQWlyYnl0ZVsiQWlyYnl0ZSAoUHlBaXJieXRlKTxicC8+RHluYW1pYyBDb25uZWN0b3JzIl0KICAgIGVuZAoKICAgIHN1YmdyYXBoIENvcmVBZ2VudFsiUGFnZXIwIENvcmUgQWdlbnQgKEZhc3RBUEkpIl0KICAgICAgICBPcmNoZXN0cmF0b3JbIkFnZW50IE9yY2hlc3RyYXRvciJdCiAgICBlbmQKCiAgICBzdWJncmFwaCBJbnRlbGxpZ2VuY2UKICAgICAgICBUcnVlRm91bmRyeVsiVHJ1ZUZvdW5kcnkgQUkgR2F0ZXdheTxici8+TW9kZWwgRXNjYWxhdGlvbiJdCiAgICAgICAgTWFjcm9zY29wZVsiTWFjcm9zY29wZTxici8+R2l0SHViIFBSIEFuYWx5c2lzIl0KICAgIGVuZAoKICAgIHN1YmdyYXBoIFJlc29sdXRpb24KICAgICAgICBCbGFuZFsiQmxhbmQgQUk8YnIvPkludGVyYWN0aXZlIFBob25lIENhbGwiXQogICAgICAgIEF1dGgwWyJBdXRoMDxici8+Q0lCQSBBdXRoICsgVG9rZW4gVmF1bHQiXQogICAgZW5kCgogICAgc3ViZ3JhcGggUmVwb3J0aW5nCiAgICAgICAgR2hvc3RbIkdob3N0IENNUzxici8+VGllcmVkIFJlcG9ydHMiXQogICAgICAgIE92ZXJtaW5kWyJPdmVybWluZDxici8+TExNIFRyYWNpbmciXQogICAgZW5kCgogICAgQWlyYnl0ZSAtLT58IkluZ2VzdCJ8IE9yY2hlc3RyYXRvcgogICAgT3JjaGVzdHJhdG9yIDwtLT58IlF1ZXJ5InwgVHJ1ZUZvdW5kcnkKICAgIFRydWVGb3VuZHJ5IC0uLT58IlRyYWNlInwgT3Zlcm1pbmQKICAgIE9yY2hlc3RyYXRvciA8LS0+fCJRdWVyeSBQUnMifCBNYWNyb3Njb3BlCiAgICBPcmNoZXN0cmF0b3IgLS0+fCJUcmlnZ2VyIENhbGwifCBCbGFuZAogICAgQmxhbmQgPC0tPnwiTWlkLWNhbGwgRGF0YSJ8IE9yY2hlc3RyYXRvcgogICAgQmxhbmQgLS0+fCJBcHByb3ZhbCJ8IEF1dGgwCiAgICBBdXRoMCAtLT58IkF1dGhvcml6ZSBGaXgifCBPcmNoZXN0cmF0b3IKICAgIE9yY2hlc3RyYXRvciAtLT58IlB1Ymxpc2gifCBHaG9zdA==)
+```mermaid
+graph TD
+    Alert[Alert Ingest POST /trigger] --> GLiNER[Pioneer GLiNER2<br/>Severity/Blast Radius]
+    GLiNER --> Agent[IncidentAgent<br/>Python State Machine]
+    
+    subgraph Data & Analytics
+        Agent --> Airbyte[Airbyte Context Store<br/>Semantic query for PRs/Jira]
+        Agent --> CH_LagLead[ClickHouse Cloud<br/>LAG/LEAD Causal SQL]
+        Agent --> Senso[Senso.ai<br/>Runbooks & Ownership]
+    end
+    
+    subgraph Actions & Control Plane
+        Agent --> Guild[Guild.ai<br/>Persistent Session & Audit Log]
+        Agent --> GLiGuard[Pioneer GLiGuard<br/>Outbound Text Screen]
+        GLiGuard --> Composio[Composio<br/>Slack Updates & Jira Tickets]
+    end
+    
+    subgraph Frontend & Output
+        Agent --> Claude[Claude Fable<br/>Postmortem Generation]
+        Claude --> OpenUI[Next.js + OpenUI<br/>Timeline & Streaming Panel]
+    end
+    
+    subgraph Observability
+        Langfuse[Langfuse<br/>Traces every LLM & API call]
+    end
+```
 
 ### Technology Stack & Sponsors
 - **Guild.ai (Control Plane):** Manages the persistent session, credential scoping for Slack/Jira, and an append-only audit trail of every state transition. 
