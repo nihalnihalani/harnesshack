@@ -3,7 +3,7 @@
 > Handoff memory between loop firings. Cold readers: read CLAUDE.md first for project law.
 > Loop: cron job `459218a5`, every 20 min. Started 2026-06-12.
 
-**Current phase: 2 (blocked on B2 ClickHouse) — next firing re-tests blockers.**
+**Current phase: 2 (blocked on B2 ClickHouse) — code pre-authored, awaiting credentials to run gates. ESCALATED at firing 3.**
 
 ## Phase checklist
 
@@ -92,4 +92,9 @@ is open; idempotency keys register at receipt (durable dedupe → Phase 2).
 
 ## Blocker age (escalation counter — louder message at 3 consecutive firings)
 
-All B1–B9: opened firing 1 (2026-06-12).
+All B1–B9: opened firing 1, still open at firing 3 (2026-06-12) → ESCALATION SENT (consolidated priority table to user). Next escalation at firing 6 if unchanged.
+
+## Pre-authored awaiting credentials (written so gates run the moment keys land)
+
+- Phase 2: demo_assets/incident_metrics.csv, scripts/replay.py, scripts/load_generator.py, libs/clickhouse/causal.py — EXECUTION gate still pending B2
+- Phase 3 prep: scripts/trigger.py, demo_assets/incident_payload.json, scripts/seed_senso.py (content authored; seeding pending B6)
