@@ -108,6 +108,14 @@ Drove a REAL incident through IncidentAgent.ingest_alert with live ClickHouse + 
 2. **CLAIM-INTEGRITY — GLiNER2 classifies this incident as P3, NOT the demo narrative's "P1".** Consistent across rich and minimal phrasings. The UI severity badge will say P3. **demo-scripts.md must sync P1→P3 at Phase 9** (cannot edit war-room artifacts before then per loop rule). Recorded here so it is not forgotten.
 3. **CONFIRMED — Guild dual-sink degrades gracefully** (JSONDecodeError from app.guild.ai HTML → explicit DEGRADED event, agent continues; ClickHouse sink unaffected). The resilience layer works as designed; the event log/product is intact on the ClickHouse sink while B1 is undecided.
 
+## GUILD REST API — REVERSE-ENGINEERED LIVE (2026-06-12 ~3:05 PM, interactive session)
+
+The control-plane REST API DOES exist on app.guild.ai — our descope code's `/v1/sessions` guess was just the wrong path. Found the real contract in the CLI bundle and verified each call live with the fresh PAT (HTTP 400 "field required" = endpoint exists + authed, not 401/404):
+- **Base:** `https://app.guild.ai/api` · **Auth:** `Authorization: Bearer $GUILD_PAT` · workspace_id `019ebd7d-a793-3bb9-0000-a78c98697748`
+- **Create:** `POST /api/workspaces/{workspace_id}/sessions` (NOT `/v1/sessions`)
+- **Append event:** `POST /api/sessions/{session_id}/events` · **Get:** `GET /api/sessions/{session_id}` · **Interrupt:** `POST /api/sessions/{session_id}/interrupt`
+- **DEEPER FINDING (the real architectural snag):** session create requires `session_type ∈ {chat, agent_test, time, webhook}` — `chat` needs a `prompt`, `agent_test` needs an `agent_version_id`. **Guild sessions are agent-EXECUTION sessions, not generic audit containers.** Our plan ("one session per incident, append arbitrary typed events as an audit trail") doesn't map 1:1 — events under a session are that agent run's events, and you must first register the IncidentAgent as a Guild agent (to get an `agent_version_id`) OR run incidents as `chat` sessions seeded with a prompt. This is the precise thing to confirm with the rep: how to use Guild as a per-incident governance/audit layer given the session model is execution-shaped. libs/guild/session.py paths need updating regardless; the agent-registration question gates whether Guild becomes truly load-bearing (B-lite CLI fallback still works either way — ClickHouse remains the durable event-log sink).
+
 ## DECISIONS
 
 | Date | Decision | Basis |
