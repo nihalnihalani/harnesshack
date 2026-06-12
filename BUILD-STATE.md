@@ -79,6 +79,11 @@ shutdown: 12 ticks, 48 rows inserted   (continuous-flow path verified live)
 
 **CLAIM-INTEGRITY RULING (supersedes the ~250s expectation in the demo line):** the live onset-to-onset lag is **135 seconds (2m15s)** — smaller than the 250s climb-start→breach ground truth, exactly as the pre-author flagged. THE DEMO SAYS 2m15s / "precedes by 2m 15s". The 250s figure may only be described as "the pool began departing baseline ~4 minutes before the breach" if narrating the CSV ground truth separately. demo-scripts.md sync happens at Phase 9. Secondary cascade edge (payments → checkout, 55s) is a bonus talking point — a real detected cascade.
 
+## FIRING-13 (verification-only, no new credentials; no code change)
+- Confirmed the Senso degradable-vs-fatal split is DELIBERATE and correct (runtime 500 degrades per Phase 8; missing credential propagates loudly — /health covers the unconfigured case). Not a bug; documented in CLAUDE.md Learned Rules.
+- Confirmed the API `/trigger` background ingest converts NotConfiguredError → visible SKIPPED_NOT_CONFIGURED event and any other exception → agent.error event (no silent timeline freeze) by code read (apps/api/main.py:265-280).
+- TestClient + SSE + BackgroundTasks deadlock in one process — harness limit, NOT a product bug. Phase 6/7 live-UI verification must use a real uvicorn server. Learned-rule added.
+
 ## FIRING-12 LIVE-DRIVE FINDINGS (partial Phase 3 de-risking; GLiNER2+ClickHouse live, Senso/Guild pending)
 
 Drove a REAL incident through IncidentAgent.ingest_alert with live ClickHouse + GLiNER2 defaults. Three findings, all real:
