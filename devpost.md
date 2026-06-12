@@ -1,7 +1,7 @@
 # IncidentSherpa
 
 ## Elevator Pitch
-An active incident-commander agent that opens mid-P0, streams a complete postmortem the moment you click Resolve, and suggests the likely owner for every remediation action — because it was the stenographer in the room, not a journalist reconstructing from Slack.
+An incident agent powered by Guild, ClickHouse, Langfuse, Airbyte, Pioneer, Senso, Composio, Render & OpenUI that streams complete postmortems from a typed event log—the stenographer in the room.
 
 ## Inspiration
 Of course your postmortem is incomplete — you wrote it from memory 48 hours later, while the only accurate record, the agent's own typed event log, was sitting there the whole time. PagerDuty, Incident.io, and FireHydrant act as journalists reconstructing events from Slack "tweets" after the fire has been put out. We wanted to build the **stenographer who was actually in the room**. 
@@ -18,30 +18,7 @@ IncidentSherpa sits as a persistent agent watching a live P0 incident:
 
 ### Architecture Diagram
 
-[View in Mermaid Live Editor](https://mermaid.live/edit#pako:eNqNUstuwjAM_BXL5w4I-gGNLmwT0sRJ0w6V08SNo0ZNYqdxE1T133GgHVA2aY4-27Gf7fQZqHIFoGCtI4e1U0z7LNC4M7Q28B1sT_d3rA6G15s-2sBq8aZf8U3M6A414QZ_60yT3rA2aM6h0LhwxrmXm0YV6mC0M_iL1bYh2oU9r2D5Y_1Z6Rz2X6071oAtyk-A04W4t4p7C610A5r3_E3YyH8-4L8_X_6KjfwvA_5fX_7KzZl8-9c4wD-49p2cR8e3c9m9m1z22D8s3_51P8C_197X3YQ32R1e9nU34U12h5d93U14k93hZV93E95kd3jZ192EN9kdXvZ1N-FNdoeXfd1NeJPd4WVfdxPeZHd42dfdhDfZHV72dTfhTXaHl33d3cAb_Dq7wy8hQ0Ue)
-
-```mermaid
-graph TD
-    Alert[Alert Ingest POST /trigger] --> GLiNER[Pioneer GLiNER2<br/>Severity/Blast Radius]
-    GLiNER --> Agent[IncidentAgent<br/>Python State Machine]
-    
-    Agent --> Airbyte[Airbyte Context Store<br/>Semantic query for PRs/Jira]
-    Agent --> CH_LagLead[ClickHouse Cloud<br/>LAG/LEAD Causal SQL]
-    Agent --> Senso[Senso.ai<br/>Runbooks & Ownership]
-    
-    Agent --> Guild[Guild.ai<br/>Persistent Session & Audit Log]
-    Agent --> GLiGuard[Pioneer GLiGuard<br/>Outbound Text Screen]
-    
-    GLiGuard --> Composio[Composio<br/>Slack Updates & Jira Tickets]
-    
-    Agent --> Claude[Claude Fable<br/>Postmortem Generation]
-    
-    Claude --> OpenUI[Next.js + OpenUI<br/>Timeline & Streaming Panel]
-    
-    subgraph Observability
-        Langfuse[Langfuse<br/>Traces every LLM & API call]
-    end
-```
+![Architecture Diagram](https://mermaid.ink/img/Z3JhcGggVEIKICAgIHN1YmdyYXBoIEluZnJhc3RydWN0dXJlCiAgICAgICAgQWlyYnl0ZVsiQWlyYnl0ZSAoUHlBaXJieXRlKTxicC8+RHluYW1pYyBDb25uZWN0b3JzIl0KICAgIGVuZAoKICAgIHN1YmdyYXBoIENvcmVBZ2VudFsiUGFnZXIwIENvcmUgQWdlbnQgKEZhc3RBUEkpIl0KICAgICAgICBPcmNoZXN0cmF0b3JbIkFnZW50IE9yY2hlc3RyYXRvciJdCiAgICBlbmQKCiAgICBzdWJncmFwaCBJbnRlbGxpZ2VuY2UKICAgICAgICBUcnVlRm91bmRyeVsiVHJ1ZUZvdW5kcnkgQUkgR2F0ZXdheTxici8+TW9kZWwgRXNjYWxhdGlvbiJdCiAgICAgICAgTWFjcm9zY29wZVsiTWFjcm9zY29wZTxici8+R2l0SHViIFBSIEFuYWx5c2lzIl0KICAgIGVuZAoKICAgIHN1YmdyYXBoIFJlc29sdXRpb24KICAgICAgICBCbGFuZFsiQmxhbmQgQUk8YnIvPkludGVyYWN0aXZlIFBob25lIENhbGwiXQogICAgICAgIEF1dGgwWyJBdXRoMDxici8+Q0lCQSBBdXRoICsgVG9rZW4gVmF1bHQiXQogICAgZW5kCgogICAgc3ViZ3JhcGggUmVwb3J0aW5nCiAgICAgICAgR2hvc3RbIkdob3N0IENNUzxici8+VGllcmVkIFJlcG9ydHMiXQogICAgICAgIE92ZXJtaW5kWyJPdmVybWluZDxici8+TExNIFRyYWNpbmciXQogICAgZW5kCgogICAgQWlyYnl0ZSAtLT58IkluZ2VzdCJ8IE9yY2hlc3RyYXRvcgogICAgT3JjaGVzdHJhdG9yIDwtLT58IlF1ZXJ5InwgVHJ1ZUZvdW5kcnkKICAgIFRydWVGb3VuZHJ5IC0uLT58IlRyYWNlInwgT3Zlcm1pbmQKICAgIE9yY2hlc3RyYXRvciA8LS0+fCJRdWVyeSBQUnMifCBNYWNyb3Njb3BlCiAgICBPcmNoZXN0cmF0b3IgLS0+fCJUcmlnZ2VyIENhbGwifCBCbGFuZAogICAgQmxhbmQgPC0tPnwiTWlkLWNhbGwgRGF0YSJ8IE9yY2hlc3RyYXRvcgogICAgQmxhbmQgLS0+fCJBcHByb3ZhbCJ8IEF1dGgwCiAgICBBdXRoMCAtLT58IkF1dGhvcml6ZSBGaXgifCBPcmNoZXN0cmF0b3IKICAgIE9yY2hlc3RyYXRvciAtLT58IlB1Ymxpc2gifCBHaG9zdA==)
 
 ### Technology Stack & Sponsors
 - **Guild.ai (Control Plane):** Manages the persistent session, credential scoping for Slack/Jira, and an append-only audit trail of every state transition. 
