@@ -3,7 +3,7 @@
 > Handoff memory between loop firings. Cold readers: read CLAUDE.md first for project law.
 > Loop: cron job `459218a5`, every 20 min. Started 2026-06-12.
 
-**Current phase: 2 (blocked on B2 ClickHouse) — code pre-authored, awaiting credentials to run gates. ESCALATED at firing 3.**
+**Current phase: 2 (blocked on B2 ClickHouse) — Phase 2/3 code pre-authored; firing 4 pre-authors Phase 3 agent core + sponsor clients + Phase 4 choke-point + Phase 8 resilience. All gates still credential-blocked.**
 
 ## Phase checklist
 
@@ -92,7 +92,7 @@ is open; idempotency keys register at receipt (durable dedupe → Phase 2).
 
 ## Blocker age (escalation counter — louder message at 3 consecutive firings)
 
-All B1–B9: opened firing 1, still open at firing 3 (2026-06-12) → ESCALATION SENT (consolidated priority table to user). Next escalation at firing 6 if unchanged.
+All B1–B9: opened firing 1; still open at firing 4 (2026-06-13). Escalation sent at firing 3; next at firing 6 if unchanged.
 
 ## Pre-authored awaiting credentials — COMPLETE (2026-06-12, commits 1fcf8bb..7ea1c50; verified 75 passed / 1 live-deselected, ruff clean)
 
