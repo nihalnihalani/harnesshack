@@ -1,5 +1,6 @@
-# Incident agent worker — Phase 1 deps (libs.tracing + libs.clickhouse).
-# Phase 3 adds: composio, httpx (Guild/Pioneer/Senso REST), anthropic.
+# Incident agent worker — Phase 3 agent core + Phase 4 choke point deps.
+# Phase 6 adds: anthropic (postmortem drafting only).
 clickhouse-connect>=0.8
 langfuse>=3.0
 httpx>=0.27  # Guild/Pioneer/Senso REST clients (Phase 3)
+composio>=0.13  # Slack/Jira actions via session.link() (Phase 4)
