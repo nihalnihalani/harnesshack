@@ -1,6 +1,6 @@
 # IncidentSherpa — Render Blueprint (CLAUDE.md deploy target).
-# Three services + a /health cron. Secrets live in Render env-var GROUPS
-# (incidentsherpa-secrets / incidentsherpa-frontend) — NEVER in this file.
+# Three services + a /health cron. Secrets live in ONE Render env-var GROUP
+# (incidentsherpa-secrets), linked by the API + worker — NEVER in this file.
 # First deploy: `render blueprint launch` (Phase 7, blocked on B9).
 
 services:
@@ -40,7 +40,10 @@ services:
     startCommand: npm run start
     autoDeploy: true
     envVars:
-      - fromGroup: incidentsherpa-frontend
+      # The frontend reads ONLY NEXT_PUBLIC_API_BASE (src/lib/events.ts), and
+      # it is injected here from the API's own Render URL — so the frontend
+      # needs no secrets group. One group (incidentsherpa-secrets) covers the
+      # API + worker; this single var fully wires the frontend.
       - key: NEXT_PUBLIC_API_BASE
         fromService:
           name: webhook-api
