@@ -1,30 +1,34 @@
 #!/usr/bin/env python3
 """Seed the Senso.ai knowledge base — runbooks, postmortems, ownership map.
 
-Authors-in-code and uploads via the REAL Senso REST API
-(https://sdk.senso.ai/api/v1, X-API-Key auth): 3 service runbooks, 2 past
-postmortem summaries, and the service ownership map. Phase 3 retrieves these
-WITH CITATIONS during a live incident — the content is therefore structured
-(symptom pattern / steps / last applied / resolution time), not filler.
+Authors-in-code and uploads via the VERIFIED-LIVE Senso apiv2 REST API
+(https://apiv2.senso.ai/api/v1, X-API-Key auth — keys are `tgr_`-prefixed):
+3 service runbooks, 2 past postmortem summaries, and the service ownership
+map. Phase 3 retrieves these WITH CITATIONS during a live incident — the
+content is therefore structured (symptom pattern / steps / last applied /
+resolution time), not filler.
 
 Raises NotConfiguredError naming B6 while SENSO_API_KEY is unset
 (BUILD-STATE.md). No offline pretend mode — a hallucinated runbook is worse
 than no runbook.
 
-NOTE: Senso's docs are sign-in gated (sponsors.md); the content-creation
-endpoint below follows their published REST shape and is overridable via
-SENSO_BASE_URL — confirm on-site at T+0 before first run.
+Ingestion is the VERIFIED-LIVE two-step S3 presigned upload:
+  (1) POST /org/kb/upload with file metadata (filename, size, content_type,
+      md5) -> {results:[{content_id, upload_url, status:"upload_pending"}]}
+  (2) PUT the raw bytes to the returned presigned upload_url.
+Senso dedupes by content_hash_md5, so re-seeding the same bytes is safe.
 
 Usage:
-    python3 scripts/seed_senso.py [--dry-run]
+    python3 scripts/seed_senso.py [--dry-run] [--verify]
 """
 
 from __future__ import annotations
 
 import argparse
-import json
+import hashlib
 import os
 import sys
+import time
 from pathlib import Path
 
 import httpx
@@ -35,8 +39,16 @@ if str(REPO_ROOT) not in sys.path:
 
 from libs.errors import NotConfiguredError
 
-DEFAULT_BASE_URL = "https://sdk.senso.ai/api/v1"
-CONTENT_PATH = "/content/raw"  # POST {title, summary, text} -> content id
+DEFAULT_BASE_URL = "https://apiv2.senso.ai/api/v1"
+UPLOAD_PATH = "/org/kb/upload"  # POST file metadata -> presigned PUT url
+SEARCH_PATH = "/org/search"  # POST {query, max_results} -> grounded answer + results
+_CONTENT_TYPE = "text/markdown"
+_NO_MATCH_ANSWER = "No results found for your query."
+
+# --verify polling budget: ingestion+indexing completes within ~10s; we allow
+# generous headroom so the verify gate is robust, not flaky.
+_VERIFY_TIMEOUT_SECONDS = 90.0
+_VERIFY_POLL_INTERVAL_SECONDS = 5.0
 
 # ---------------------------------------------------------------------------
 # Knowledge-base content (authored in code — single reviewable source)
@@ -262,29 +274,93 @@ def base_url() -> str:
     return os.environ.get("SENSO_BASE_URL", "").strip() or DEFAULT_BASE_URL
 
 
+def _slugify(title: str) -> str:
+    """Stable filename slug from a document title (e.g. 'payments-p99-...md')."""
+    keep = [c.lower() if c.isalnum() else "-" for c in title]
+    slug = "".join(keep)
+    while "--" in slug:
+        slug = slug.replace("--", "-")
+    return slug.strip("-")[:80] or "document"
+
+
+def document_bytes(document: dict[str, str]) -> bytes:
+    """Render one authored document to the markdown bytes Senso ingests.
+
+    The title heads the file and the summary precedes the body so retrieval's
+    grounded answer has both the citable title and a one-line gist.
+    """
+    body = f"# {document['title']}\n\n> {document['summary']}\n\n{document['text']}"
+    return body.encode("utf-8")
+
+
 def upload_document(client: httpx.Client, document: dict[str, str]) -> dict:
-    """POST one document to Senso; returns the parsed response. Raises on non-2xx."""
-    response = client.post(
-        CONTENT_PATH,
+    """Two-step VERIFIED-LIVE ingest of one document; returns the upload result.
+
+    (1) POST /org/kb/upload with the file metadata (md5 lets Senso dedupe).
+    (2) PUT the raw bytes to the returned presigned upload_url.
+    Treats HTTP 200 + status "upload_pending" as success. Raises on any non-2xx
+    or a missing upload_url — no silent partial uploads.
+    """
+    data = document_bytes(document)
+    filename = f"{_slugify(document['title'])}.md"
+    md5_hex = hashlib.md5(data).hexdigest()
+
+    meta_resp = client.post(
+        UPLOAD_PATH,
         json={
-            "title": document["title"],
-            "summary": document["summary"],
-            "text": document["text"],
+            "files": [
+                {
+                    "filename": filename,
+                    "file_size_bytes": len(data),
+                    "content_type": _CONTENT_TYPE,
+                    "content_hash_md5": md5_hex,
+                }
+            ]
         },
     )
-    if response.status_code >= 300:
+    if meta_resp.status_code >= 300:
         raise RuntimeError(
-            f"Senso upload failed for {document['title']!r}: "
-            f"HTTP {response.status_code} {response.text[:500]}"
+            f"Senso /org/kb/upload failed for {filename!r}: "
+            f"HTTP {meta_resp.status_code} {meta_resp.text[:500]}"
         )
-    try:
-        return response.json()
-    except json.JSONDecodeError:
-        return {"raw": response.text[:500]}
+    meta = meta_resp.json()
+    results = meta.get("results") or []
+    if not results:
+        raise RuntimeError(
+            f"Senso /org/kb/upload returned no results for {filename!r}: {meta!r}"
+        )
+    entry = results[0]
+    upload_url = entry.get("upload_url")
+    if not upload_url:
+        raise RuntimeError(
+            f"Senso /org/kb/upload returned no upload_url for {filename!r}: {entry!r}"
+        )
+
+    # Step 2: presigned PUT of the raw bytes. The presigned URL is absolute and
+    # carries its own auth — do NOT send the X-API-Key header here.
+    put_resp = httpx.put(
+        upload_url,
+        content=data,
+        headers={"Content-Type": _CONTENT_TYPE},
+        timeout=60.0,
+    )
+    if put_resp.status_code != 200:
+        raise RuntimeError(
+            f"Senso presigned PUT failed for {filename!r}: "
+            f"HTTP {put_resp.status_code} {put_resp.text[:300]}"
+        )
+
+    return {
+        "filename": filename,
+        "content_id": entry.get("content_id"),
+        "ingestion_run_id": entry.get("ingestion_run_id"),
+        "status": entry.get("status"),
+    }
 
 
-def seed(api_key: str) -> int:
-    """Upload every document; returns the count uploaded."""
+def seed(api_key: str) -> list[dict]:
+    """Upload every document; returns the per-document upload results."""
+    uploaded: list[dict] = []
     with httpx.Client(
         base_url=base_url(),
         headers={"X-API-Key": api_key},
@@ -292,9 +368,67 @@ def seed(api_key: str) -> int:
     ) as client:
         for document in ALL_DOCUMENTS:
             result = upload_document(client, document)
-            ref = result.get("id") or result.get("content_id") or result
-            print(f"uploaded: {document['title']!r} -> {ref}")
-    return len(ALL_DOCUMENTS)
+            uploaded.append(result)
+            print(
+                f"uploaded: {document['title']!r} -> "
+                f"content_id={result['content_id']} status={result['status']}"
+            )
+    return uploaded
+
+
+# ---------------------------------------------------------------------------
+# Verify — poll search until each runbook topic is grounded
+# ---------------------------------------------------------------------------
+
+VERIFY_QUERIES: list[str] = [
+    "payments-service p99 latency breach",
+    "payments-db-primary connection pool exhaustion",
+    "checkout-service degradation",
+]
+
+
+def _search(client: httpx.Client, query: str) -> dict:
+    resp = client.post(SEARCH_PATH, json={"query": query, "max_results": 3})
+    resp.raise_for_status()
+    return resp.json()
+
+
+def verify(api_key: str) -> bool:
+    """Poll POST /org/search for each runbook topic until grounded (or time out).
+
+    Returns True only if every topic returns total_results>0 within the budget.
+    Prints the grounded answer + top citation for each.
+    """
+    all_ok = True
+    with httpx.Client(
+        base_url=base_url(),
+        headers={"X-API-Key": api_key},
+        timeout=60.0,
+    ) as client:
+        for query in VERIFY_QUERIES:
+            deadline = time.monotonic() + _VERIFY_TIMEOUT_SECONDS
+            grounded: dict | None = None
+            while time.monotonic() < deadline:
+                data = _search(client, query)
+                if data.get("total_results", 0) > 0 and data.get("results"):
+                    if data.get("answer") != _NO_MATCH_ANSWER:
+                        grounded = data
+                        break
+                time.sleep(_VERIFY_POLL_INTERVAL_SECONDS)
+
+            if grounded is None:
+                all_ok = False
+                print(f"VERIFY FAIL: {query!r} — no grounded result within "
+                      f"{_VERIFY_TIMEOUT_SECONDS:.0f}s", file=sys.stderr)
+                continue
+
+            top = grounded["results"][0]
+            citation = f"{top.get('title')} ({top.get('content_id')})"
+            answer = grounded["answer"]
+            print(f"\nVERIFY OK: {query!r}")
+            print(f"  citation: {citation}")
+            print(f"  answer: {answer[:400]}")
+    return all_ok
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -303,6 +437,11 @@ def main(argv: list[str] | None = None) -> int:
         "--dry-run",
         action="store_true",
         help="print the authored documents without uploading (no credentials needed)",
+    )
+    parser.add_argument(
+        "--verify",
+        action="store_true",
+        help="after seeding, poll /org/search per runbook topic until grounded",
     )
     args = parser.parse_args(argv)
 
@@ -318,8 +457,15 @@ def main(argv: list[str] | None = None) -> int:
         print(f"blocked: {exc}", file=sys.stderr)
         return 2
 
-    count = seed(api_key)
-    print(f"seeded {count} documents into Senso ({base_url()})")
+    uploaded = seed(api_key)
+    print(f"seeded {len(uploaded)} documents into Senso ({base_url()})")
+
+    if args.verify:
+        print("\nverifying (polling /org/search per runbook topic)...")
+        if not verify(api_key):
+            print("verify: NOT all topics grounded", file=sys.stderr)
+            return 1
+        print("\nverify: all runbook topics return grounded answers")
     return 0
 
 

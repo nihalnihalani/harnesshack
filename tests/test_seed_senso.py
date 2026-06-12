@@ -103,8 +103,26 @@ def test_dry_run_needs_no_credentials(capsys):
     assert "3 runbooks, 2 postmortems, 1 ownership" in out
 
 
-def test_base_url_defaults_to_published_senso_endpoint(monkeypatch):
+def test_base_url_defaults_to_verified_live_apiv2_endpoint(monkeypatch):
     monkeypatch.delenv("SENSO_BASE_URL", raising=False)
-    assert base_url() == DEFAULT_BASE_URL == "https://sdk.senso.ai/api/v1"
+    assert base_url() == DEFAULT_BASE_URL == "https://apiv2.senso.ai/api/v1"
     monkeypatch.setenv("SENSO_BASE_URL", "https://example.test/api/v1")
     assert base_url() == "https://example.test/api/v1"
+
+
+def test_document_bytes_includes_title_and_summary():
+    from scripts.seed_senso import document_bytes
+
+    doc = RUNBOOKS[0]
+    rendered = document_bytes(doc).decode("utf-8")
+    assert rendered.startswith(f"# {doc['title']}")
+    assert doc["summary"] in rendered
+    assert doc["text"] in rendered
+
+
+def test_slugify_produces_a_markdown_safe_filename():
+    from scripts.seed_senso import _slugify
+
+    slug = _slugify("Runbook: payments-service p99 latency breach")
+    assert slug == "runbook-payments-service-p99-latency-breach"
+    assert " " not in slug and ":" not in slug
