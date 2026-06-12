@@ -100,7 +100,8 @@ shutdown: 12 ticks, 48 rows inserted   (continuous-flow path verified live)
 | ~~B2~~ | ~~ClickHouse Cloud~~ | **RESOLVED firing 10 (2026-06-13)** — creds in .env (host zr8in8fpga.us-west-2.aws.clickhouse.cloud), `SELECT 1` → 1 over HTTPS. All three pre-written gates ran green: replay.py --truncate-first --speed 100 (960 rows / 240 ticks), `pytest -m live` 1 passed (real payments-db-primary→payments-service causal edge asserted on the cluster), load_generator --inject db_pool_exhaustion --max-ticks 80 (320 rows, p99 breach detected t+250s after injection) | — | done |
 | ~~B2~~ | ~~ClickHouse~~ | **RESOLVED (2026-06-13)** — SELECT 1 in 2088ms (server 25.12.1, us-west-2); schema applied (events 397ms, metrics 244ms, airbyte_history 388ms); replay 960 rows/150.2s at --speed 100; causal gate PASSED; load_generator live-injected 48 rows/12 ticks | — | done |
 | ~~B3~~ | ~~Langfuse~~ | **RESOLVED firing 9 (2026-06-13)** — live span via libs/tracing @traced, confirmed by API readback: trace c0d181911da7b49e093fad9c843095e9, visible after 20s. Fix required first: tracing.py was v3-API, installed SDK is 4.7.1 (see DECISIONS + CLAUDE.md Learned Rules) | — | done |
-| B4 | Pioneer (Fastino) | `PIONEER_API_KEY` | pioneer.ai → Settings → API Keys | GLiNER2 severity-schema call, latency MEASURED; GLiGuard screen on sample text |
+| ~~B4-GLiNER2~~ | ~~Pioneer GLiNER2~~ | **RESOLVED (2026-06-13, firing 11)** — live extraction verified: severity P3 (conf 0.822), affected_services=(payments-service, payments-db-primary), server latency 123ms. Client REWRITTEN to the real contract (model_id/text + unified classifications/entities schema; result.data envelope); 18 Pioneer unit tests re-pinned to a captured live response. | — | done |
+| B4-GLiGuard | Pioneer GLiGuard | **DECISION NEEDED** — GLiGuard is NOT in Pioneer's hosted /v1/models catalog (70 entries, all generative; even working gliner2-base isn't listed → catalog is generative-only). Two real paths: **(A)** local Apache-2.0 `transformers` inference (already the designed demo-script fallback; adds the model download + torch dep) or **(B)** ask the rep for the hosted GLiGuard model id / endpoint. Until resolved, the Composio choke-point fails CLOSED (no unscreened sends — honest, not a mock). | gliguard.screen() live call OR local-transformers screen succeeds |
 | B5 | Airbyte | `AIRBYTE_CLIENT_ID`, `AIRBYTE_CLIENT_SECRET` | cloud.airbyte.com → settings → applications | workspace list + GitHub/Jira connector visibility |
 | B6 | Senso.ai | `SENSO_API_KEY` | senso.ai signup ($100 free tier, no CC) | `senso whoami` / REST doc-list |
 | B7 | Composio | `COMPOSIO_API_KEY` (+ browser OAuth for Slack workspace & Jira project) | composio.dev dashboard → API key; then `session.link()` flows for Slack (chat:write) + Jira (create) | link() status check for both apps |
@@ -128,6 +129,8 @@ Absorbed at firing 8. CHANGES TO THE PLAN:
 | **Causal lag, DB→payments (THE demo number)** | **135 s (2m15s)** | live lagInFrame onset pairing | 2026-06-13 |
 | Causal lag, payments→checkout (cascade) | 55 s | same query | 2026-06-13 |
 | Anthropic claude-fable-5 round-trip (8 max_tokens) | 4335 ms | anthropic.messages.create | 2026-06-13 |
+| **GLiNER2 severity-extraction inference (THE Pioneer badge number)** | **123–199 ms (server-reported)** | extract_severity() live, result.data.latency_ms | 2026-06-13 |
+| GLiNER2 severity-classification confidence (demo text) | 0.822 (P3) | extract_severity() live | 2026-06-13 |
 | Replay throughput | 960 rows / 150.2 s at --speed 100 | scripts/replay.py | 2026-06-13 |
 | Langfuse ingestion visibility lag | ~20 s | API readback poll, 5s interval | 2026-06-13 |
 

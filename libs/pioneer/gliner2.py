@@ -36,22 +36,29 @@ from libs.tracing import call_traced
 logger = logging.getLogger("incidentsherpa.pioneer.gliner2")
 
 PIONEER_INFERENCE_URL = "https://api.pioneer.ai/inference"
-MODEL = "gliner2"
+# Real model id confirmed against the live /inference contract (firing 11,
+# 2026-06-13). The authored placeholder "gliner2" / {model,input} shape was
+# wrong; the API uses model_id + text + the unified classifications/entities
+# schema grammar. See BUILD-STATE.md DECISIONS + CLAUDE.md Learned Rules.
+MODEL_ID = "fastino/gliner2-base-v1"
 SEVERITY_LABELS = ("P0", "P1", "P2", "P3")
+ENTITY_LABEL = "affected_service"
 _TIMEOUT_SECONDS = 30.0
-
-# Plausible top-level containers for the inference result. The parser walks
-# these in order; it does NOT guess values, only locations.
-_RESULT_CONTAINER_KEYS = ("output", "result", "results", "data", "extractions", "predictions")
 
 
 @dataclass(frozen=True)
 class SeverityExtraction:
-    """GLiNER2 extraction result with the MEASURED call latency."""
+    """GLiNER2 extraction result.
+
+    `latency_ms` is the SERVER-reported inference time (the model-speed number
+    the UI badge cites — distinct from client wall-clock). `confidence` is the
+    classifier's own confidence in the severity label.
+    """
 
     severity: str  # one of SEVERITY_LABELS
     affected_services: tuple[str, ...]
     latency_ms: float
+    confidence: float = 0.0
 
 
 def _api_key() -> str:
@@ -64,87 +71,58 @@ def _api_key() -> str:
 
 
 def build_extraction_request(text: str) -> dict[str, Any]:
-    """Build the schema-conditioned GLiNER2 inference request body."""
+    """Build the schema-conditioned GLiNER2 inference request body.
+
+    Confirmed live contract: top-level model_id + text + a unified `schema`
+    whose keys must be among {classifications, entities, structures, relations}.
+    """
     return {
-        "model": MODEL,
-        "input": text,
+        "model_id": MODEL_ID,
+        "text": text,
         "schema": {
-            "severity": {"type": "classification", "labels": list(SEVERITY_LABELS)},
-            "affected_services": {"type": "span"},
+            "classifications": {"severity": list(SEVERITY_LABELS)},
+            "entities": [ENTITY_LABEL],
         },
     }
 
 
-def _find_result_container(data: Any) -> dict[str, Any]:
-    """Locate the dict that holds `severity` — tolerant on nesting, loud on failure."""
-    candidates: list[Any] = [data]
-    if isinstance(data, dict):
-        candidates.extend(data.get(key) for key in _RESULT_CONTAINER_KEYS)
-    for candidate in candidates:
-        if isinstance(candidate, list) and candidate and isinstance(candidate[0], dict):
-            candidate = candidate[0]
-        if isinstance(candidate, dict) and "severity" in candidate:
-            return candidate
-    raise UnexpectedResponseShapeError(
-        "GLiNER2 response has no resolvable 'severity' container — confirm the "
-        f"live response shape when B4 lands (got: {str(data)[:300]!r})"
-    )
+def parse_extraction_response(data: Any) -> tuple[str, tuple[str, ...], float]:
+    """Parse (severity, affected_services, confidence) from a GLiNER2 response.
 
-
-def _coerce_label(value: Any) -> Any:
-    """Pull a label out of {label|value|class: ...} / [first] shapes; no guessing."""
-    if isinstance(value, list) and value:
-        value = value[0]
-    if isinstance(value, dict):
-        for key in ("label", "value", "class"):
-            if key in value:
-                return value[key]
-    return value
-
-
-def _coerce_span_text(value: Any) -> Any:
-    if isinstance(value, dict):
-        for key in ("text", "span", "value"):
-            if key in value:
-                return value[key]
-    return value
-
-
-def parse_extraction_response(data: Any) -> tuple[str, tuple[str, ...]]:
-    """Parse (severity, affected_services) from a GLiNER2 inference response.
-
-    Tolerant about container nesting, strict about values: severity must
-    resolve to one of SEVERITY_LABELS and affected_services must be present
-    (an empty span list is honest — a MISSING key is an unexpected shape).
-    Anything else raises UnexpectedResponseShapeError. Never guesses.
+    Real envelope: data.result.data.{severity:{label,confidence},
+    entities:{affected_service:[{text,confidence,start,end}]}}. Strict about
+    values: severity must resolve to one of SEVERITY_LABELS; never guesses.
     """
-    container = _find_result_container(data)
-    severity = _coerce_label(container["severity"])
+    if not isinstance(data, dict):
+        raise UnexpectedResponseShapeError(f"GLiNER2 response is not a dict: {str(data)[:200]!r}")
+    container = (data.get("result") or {}).get("data")
+    if not isinstance(container, dict) or "severity" not in container:
+        raise UnexpectedResponseShapeError(
+            f"GLiNER2 response has no result.data.severity — got: {str(data)[:300]!r}"
+        )
+    sev_block = container["severity"]
+    severity = sev_block.get("label") if isinstance(sev_block, dict) else sev_block
+    confidence = float(sev_block.get("confidence", 0.0)) if isinstance(sev_block, dict) else 0.0
     if severity not in SEVERITY_LABELS:
         raise UnexpectedResponseShapeError(
-            f"GLiNER2 severity {severity!r} is not one of {SEVERITY_LABELS} — "
-            "refusing to guess; confirm the live response shape when B4 lands"
+            f"GLiNER2 severity {severity!r} is not one of {SEVERITY_LABELS} — refusing to guess"
         )
-    if "affected_services" not in container:
+    entities = container.get("entities")
+    if not isinstance(entities, dict) or ENTITY_LABEL not in entities:
+        got = sorted(entities) if isinstance(entities, dict) else entities
         raise UnexpectedResponseShapeError(
-            "GLiNER2 response container has no 'affected_services' key (the schema "
-            f"requested it) — got keys {sorted(container)!r}; confirm shape when B4 lands"
+            f"GLiNER2 response has no entities.{ENTITY_LABEL} — got keys {got!r}"
         )
-    raw_services = container["affected_services"]
-    if raw_services is None:
-        raw_services = []
-    if not isinstance(raw_services, list):
-        raw_services = [raw_services]
+    spans = entities[ENTITY_LABEL] or []
     services: list[str] = []
-    for item in raw_services:
-        text = _coerce_span_text(item)
-        if not isinstance(text, str):
+    for item in spans:
+        span_text = item.get("text") if isinstance(item, dict) else item
+        if not isinstance(span_text, str):
             raise UnexpectedResponseShapeError(
-                f"GLiNER2 affected_services entry {item!r} has no resolvable span text "
-                "— confirm the live response shape when B4 lands"
+                f"GLiNER2 entity span {item!r} has no resolvable text — refusing to guess"
             )
-        services.append(text)
-    return str(severity), tuple(services)
+        services.append(span_text)
+    return str(severity), tuple(services), confidence
 
 
 def extract_severity(text: str) -> SeverityExtraction:
@@ -167,18 +145,25 @@ def extract_severity(text: str) -> SeverityExtraction:
             timeout=_TIMEOUT_SECONDS,
         )
         response.raise_for_status()
-        latency_ms = (time.perf_counter() - start) * 1000.0
-        return response.json(), latency_ms
+        wall_ms = (time.perf_counter() - start) * 1000.0
+        return response.json(), wall_ms
 
-    data, latency_ms = call_traced("pioneer.gliner2.extract_severity", _call, logger=logger)
-    severity, services = parse_extraction_response(data)
+    data, _wall_ms = call_traced("pioneer.gliner2.extract_severity", _call, logger=logger)
+    severity, services, confidence = parse_extraction_response(data)
+    # Prefer the SERVER-reported inference latency (model speed, the badge
+    # number); fall back to client wall-clock only if absent. Claim integrity.
+    server_ms = data.get("latency_ms") if isinstance(data, dict) else None
+    latency_ms = float(server_ms) if isinstance(server_ms, (int, float)) else _wall_ms
     return SeverityExtraction(
-        severity=severity, affected_services=services, latency_ms=latency_ms
+        severity=severity,
+        affected_services=services,
+        latency_ms=latency_ms,
+        confidence=confidence,
     )
 
 
 __all__ = [
-    "MODEL",
+    "MODEL_ID",
     "PIONEER_INFERENCE_URL",
     "SEVERITY_LABELS",
     "SeverityExtraction",

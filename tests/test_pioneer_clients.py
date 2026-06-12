@@ -13,23 +13,39 @@ import pytest
 from libs.errors import NotConfiguredError, UnexpectedResponseShapeError
 from libs.pioneer import gliguard, gliner2
 
+# A REAL response captured from the live Pioneer /inference API (firing 11,
+# 2026-06-13) — not a hand-invented fixture. This is the contract the parser
+# targets; tests assert against the actual envelope the server returns.
+LIVE_RESPONSE = {
+    "type": "encoder",
+    "inference_id": "8cdc9c0c-7b54-4e31-aa3e-34d621d7c8e7",
+    "result": {
+        "data": {
+            "entities": {
+                "affected_service": [
+                    {"text": "checkout-service", "confidence": 0.88, "start": 77, "end": 93},
+                    {"text": "payments-service", "confidence": 0.77, "start": 0, "end": 16},
+                ]
+            },
+            "severity": {"label": "P3", "confidence": 0.7799},
+        }
+    },
+    "model_id": "fastino/gliner2-base-v1",
+    "latency_ms": 199.18,
+}
+
 
 class TestGliner2RequestShape:
-    def test_model_and_input(self):
+    def test_model_id_and_text(self):
         body = gliner2.build_extraction_request("payments p99 breach")
-        assert body["model"] == "gliner2"
-        assert body["input"] == "payments p99 breach"
+        assert body["model_id"] == "fastino/gliner2-base-v1"
+        assert body["text"] == "payments p99 breach"
 
-    def test_schema_conditions_severity_labels(self):
+    def test_schema_uses_unified_grammar(self):
+        # keys must be among {classifications, entities, structures, relations}
         body = gliner2.build_extraction_request("x")
-        assert body["schema"]["severity"] == {
-            "type": "classification",
-            "labels": ["P0", "P1", "P2", "P3"],
-        }
-
-    def test_schema_requests_affected_services_span(self):
-        body = gliner2.build_extraction_request("x")
-        assert body["schema"]["affected_services"] == {"type": "span"}
+        assert body["schema"]["classifications"] == {"severity": ["P0", "P1", "P2", "P3"]}
+        assert body["schema"]["entities"] == ["affected_service"]
 
 
 class TestGliner2Keyless:
@@ -39,45 +55,35 @@ class TestGliner2Keyless:
 
 
 class TestGliner2Parse:
-    def test_flat_shape(self):
-        severity, services = gliner2.parse_extraction_response(
-            {"severity": "P0", "affected_services": ["payments-service"]}
-        )
-        assert severity == "P0"
-        assert services == ("payments-service",)
+    def test_live_response_shape(self):
+        severity, services, confidence = gliner2.parse_extraction_response(LIVE_RESPONSE)
+        assert severity == "P3"
+        assert services == ("checkout-service", "payments-service")
+        assert confidence == pytest.approx(0.7799, abs=1e-3)
 
-    @pytest.mark.parametrize("container_key", ["output", "result", "results", "data"])
-    def test_nested_container_shapes(self, container_key: str):
-        data = {container_key: {"severity": "P1", "affected_services": []}}
-        assert gliner2.parse_extraction_response(data) == ("P1", ())
-
-    def test_list_container_shape(self):
-        data = {"results": [{"severity": "P2", "affected_services": [{"text": "checkout"}]}]}
-        assert gliner2.parse_extraction_response(data) == ("P2", ("checkout",))
-
-    def test_label_dict_severity(self):
-        data = {"severity": {"label": "P0"}, "affected_services": []}
-        assert gliner2.parse_extraction_response(data) == ("P0", ())
+    def test_empty_entity_list_is_honest(self):
+        data = {"result": {"data": {"severity": {"label": "P1", "confidence": 0.9},
+                                     "entities": {"affected_service": []}}}}
+        assert gliner2.parse_extraction_response(data) == ("P1", (), pytest.approx(0.9))
 
     def test_unknown_severity_label_fails_loudly(self):
+        data = {"result": {"data": {"severity": {"label": "CRITICAL"},
+                                     "entities": {"affected_service": []}}}}
         with pytest.raises(UnexpectedResponseShapeError):
-            gliner2.parse_extraction_response(
-                {"severity": "CRITICAL", "affected_services": []}
-            )
+            gliner2.parse_extraction_response(data)
 
     def test_missing_severity_fails_loudly(self):
         with pytest.raises(UnexpectedResponseShapeError):
-            gliner2.parse_extraction_response({"something": "else"})
+            gliner2.parse_extraction_response({"result": {"data": {"something": "else"}}})
 
-    def test_missing_affected_services_key_fails_loudly(self):
+    def test_missing_entities_key_fails_loudly(self):
+        data = {"result": {"data": {"severity": {"label": "P0"}}}}
         with pytest.raises(UnexpectedResponseShapeError):
-            gliner2.parse_extraction_response({"severity": "P0"})
+            gliner2.parse_extraction_response(data)
 
-    def test_unresolvable_span_entry_fails_loudly(self):
+    def test_non_dict_fails_loudly(self):
         with pytest.raises(UnexpectedResponseShapeError):
-            gliner2.parse_extraction_response(
-                {"severity": "P0", "affected_services": [{"score": 0.9}]}
-            )
+            gliner2.parse_extraction_response("not a dict")
 
 
 class TestGliguardRequestShape:
