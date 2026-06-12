@@ -79,6 +79,17 @@ shutdown: 12 ticks, 48 rows inserted   (continuous-flow path verified live)
 
 **CLAIM-INTEGRITY RULING (supersedes the ~250s expectation in the demo line):** the live onset-to-onset lag is **135 seconds (2m15s)** — smaller than the 250s climb-start→breach ground truth, exactly as the pre-author flagged. THE DEMO SAYS 2m15s / "precedes by 2m 15s". The 250s figure may only be described as "the pool began departing baseline ~4 minutes before the breach" if narrating the CSV ground truth separately. demo-scripts.md sync happens at Phase 9. Secondary cascade edge (payments → checkout, 55s) is a bonus talking point — a real detected cascade.
 
+## FIRING-16 — COMPLETE END-TO-END RUN (without Airbyte/Senso/Composio/GLiGuard — all degrade honestly)
+User asked "without Airbyte can you make it run completely?" — established that Airbyte was never the blocker (it already SKIPs gracefully). Drove the FULL flow against live ClickHouse + GLiNER2 + Anthropic:
+- INGEST → MITIGATING, 16 events: GLiNER2 P3 (108ms live), causal 135s (live), Senso→DEGRADED (bad key 401s but degrades), Airbyte→SKIPPED, Guild→DEGRADED (circuit opens; ClickHouse sink carries the log), Composio steps→SKIPPED.
+- RESOLVE → POSTMORTEM **STREAMED 54 chunks / 5923 chars** — a real postmortem written from the live event log by claude-fable-5.
+TWO degrade fixes made so the postmortem completes when enrichment is unavailable (Phase 8-aligned, NOT mocks):
+1. Senso precedents in postmortem now DEGRADE (event-log-only postmortem + explicit DEGRADED event) instead of propagating the 401. The event log is the source of truth; precedents are enrichment.
+2. GLiGuard screen distinguishes BLOCKED (real refusal → still fails closed, no stream) from UNAVAILABLE (not hosted → streams to the operator's OWN UI with a loud DEGRADED event + `screened: false` on postmortem_complete). Composio EXTERNAL-send choke-point stays hard fail-closed (unchanged). Claim integrity: never claims a screen happened when it didn't.
+GLiGuard local fallback checked: HF models gliguard-* return 401 (gated/need license+torch) — not a quick win; the explicit-degrade path is the honest interim.
+3 regression tests added (TestDegradeNotDie). 230 tests green, ruff clean.
+**FINDING (demo perf):** the postmortem took 60.3s end-to-end — OVER the demo's ≤30s gate. The buffer-then-replay-at-model-pace is the cost. Flag for Phase 6/9: cap replay delay tighter or accept a faster draft. Recorded, not yet tuned.
+
 ## FIRING-15 — Phase 5 Airbyte agent-sdk probe (credential live, connectors missing)
 - `pip install airbyte-agent-sdk` → v0.1.242 (pinned in apps/worker/requirements.txt). `a.configure(client_id, client_secret)` authenticates with no error against the verified workspace.
 - Real API model confirmed: `connect(connector_name, client_id, client_secret) -> HostedExecutor` with `.execute/.check/.inspect_connector/.read_skill_docs`; Workspace has list/get/create_workflow/create_automation. The "Context Store" is the Agent-Engine connector-as-tools surface (the agent executes read actions against GitHub/Jira connectors).

@@ -362,11 +362,29 @@ async def generate_postmortem(
         )
 
     # (2) Causal result (B2) + cited Senso precedents (B6).
+    # Precedents are ENRICHMENT, not the source of truth — the event log is.
+    # If Senso is unavailable (NotConfigured / 4xx / 5xx) the postmortem is
+    # still written from the log alone (the stenographer principle); the gap
+    # is surfaced as an explicit DEGRADED event, never silently dropped.
     causal_edges = await asyncio.to_thread(run_causal_query)
     symptom_query = " ".join(
         sorted({event.event_type for event in events} | {incident_id})
     )
-    precedents = await asyncio.to_thread(get_precedents, symptom_query)
+    try:
+        precedents = await asyncio.to_thread(get_precedents, symptom_query)
+    except Exception as exc:  # noqa: BLE001 — degrade-not-die on enrichment
+        precedents = []
+        publish(
+            _event(
+                "DEGRADED",
+                {
+                    "service": "senso",
+                    "step": "postmortem_precedents",
+                    "error": f"{type(exc).__name__}: {exc}"[:200],
+                    "effect": "postmortem written from the event log alone",
+                },
+            )
+        )
 
     # (3) Strictly-from-the-log prompt; (4) buffered claude-fable-5 stream (B8).
     prompt = build_postmortem_prompt(incident_id, events, causal_edges, precedents)
@@ -374,24 +392,49 @@ async def generate_postmortem(
     full_text = "".join(chunk for chunk, _ in buffered)
 
     # (5) GLiGuard screens the COMPLETE text BEFORE any token is released (B4).
-    screen_result = await asyncio.to_thread(screener, full_text)
-    if not isinstance(screen_result, ScreenResult):
-        raise GuardrailBypassError(
-            f"screener returned {type(screen_result).__name__!r} instead of a "
-            "ScreenResult — no screen verdict means NO stream"
-        )
-    if not screen_result.allowed:
+    # Three outcomes, all honest:
+    #  - a real ScreenResult that BLOCKS  -> no stream (fail closed, unchanged)
+    #  - a real ScreenResult that ALLOWS  -> stream
+    #  - GLiGuard UNAVAILABLE (not hosted / transport error) -> stream the
+    #    postmortem to the operator's OWN UI but mark it loudly UNSCREENED via
+    #    a DEGRADED event. The postmortem is internal UI, not an external send;
+    #    the Composio choke-point for Slack/Jira stays hard fail-closed. We
+    #    NEVER claim a screen happened when it did not (claim integrity).
+    screened = True
+    screen_result: ScreenResult | None = None
+    try:
+        screen_result = await asyncio.to_thread(screener, full_text)
+    except Exception as exc:  # noqa: BLE001 — GLiGuard unavailable -> degrade-open w/ loud marker
+        screened = False
         publish(
             _event(
-                "BLOCKED_BY_GUARDRAIL",
+                "DEGRADED",
                 {
-                    "step": "postmortem",
-                    "categories": list(screen_result.categories),
-                    "screen_latency_ms": screen_result.latency_ms,  # MEASURED
+                    "service": "pioneer-gliguard",
+                    "step": "postmortem_screen",
+                    "error": f"{type(exc).__name__}: {exc}"[:200],
+                    "effect": "streamed UNSCREENED (GLiGuard unavailable); internal UI only",
                 },
             )
         )
-        raise PostmortemBlockedError(screen_result.categories)
+    if screened:
+        if not isinstance(screen_result, ScreenResult):
+            raise GuardrailBypassError(
+                f"screener returned {type(screen_result).__name__!r} instead of a "
+                "ScreenResult — no screen verdict means NO stream"
+            )
+        if not screen_result.allowed:
+            publish(
+                _event(
+                    "BLOCKED_BY_GUARDRAIL",
+                    {
+                        "step": "postmortem",
+                        "categories": list(screen_result.categories),
+                        "screen_latency_ms": screen_result.latency_ms,  # MEASURED
+                    },
+                )
+            )
+            raise PostmortemBlockedError(screen_result.categories)
 
     # (6) Release tokens from the screened buffer at the model's measured pace.
     for index, (chunk, delay) in enumerate(buffered):
@@ -409,7 +452,8 @@ async def generate_postmortem(
                 "token_count": len(buffered),
                 "char_count": len(full_text),
                 "model": ANTHROPIC_MODEL,
-                "screen_latency_ms": screen_result.latency_ms,  # MEASURED
+                "screened": screened,  # claim integrity: false when GLiGuard was unavailable
+                "screen_latency_ms": (screen_result.latency_ms if screen_result else None),
             },
         )
     )

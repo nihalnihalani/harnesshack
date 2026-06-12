@@ -239,6 +239,45 @@ class TestBufferThenStream:
             run_generator(fetch_events=lambda _i: [])
 
 
+class TestDegradeNotDie:
+    """firing-15: enrichment failures degrade with explicit events; they never
+    crash the postmortem (stenographer principle — the event log is enough)."""
+
+    def _boom(self, *_a, **_k):
+        raise RuntimeError("service unavailable")
+
+    def test_senso_precedents_failure_degrades_and_still_streams(self):
+        chunks, _order, published, _ = run_generator(get_precedents=self._boom)
+        assert chunks  # postmortem still streamed from the event log alone
+        degraded = [p for p in published if p["event_type"] == "DEGRADED"]
+        assert any(
+            p["payload"].get("step") == "postmortem_precedents"
+            and p["payload"].get("service") == "senso"
+            for p in degraded
+        )
+
+    def test_gliguard_unavailable_streams_unscreened_with_loud_marker(self):
+        chunks, _order, published, _ = run_generator(screener=self._boom)
+        assert chunks  # streamed despite GLiGuard being unavailable
+        degraded = [p for p in published if p["event_type"] == "DEGRADED"]
+        assert any(
+            p["payload"].get("step") == "postmortem_screen"
+            and p["payload"].get("service") == "pioneer-gliguard"
+            for p in degraded
+        )
+        # claim integrity: completion event must mark screened=False
+        complete = [p for p in published if p["event_type"] == "postmortem_complete"]
+        assert complete and complete[0]["payload"]["screened"] is False
+
+    def test_real_blocked_verdict_still_fails_closed(self):
+        # A genuine GLiGuard BLOCK is NOT a degrade — it must stop the stream.
+        def blocker(_text):
+            return ScreenResult(allowed=False, categories=("harm",), latency_ms=9.9)
+
+        with pytest.raises(PostmortemBlockedError):
+            run_generator(screener=blocker)
+
+
 # ---------------------------------------------------------------------------
 # Honest credential gates (the production defaults, keyless).
 # ---------------------------------------------------------------------------
