@@ -13,3 +13,12 @@ class NotConfiguredError(RuntimeError):
     The message MUST name the missing env vars and the BUILD-STATE.md
     blocker ID so a human knows exactly what to unblock.
     """
+
+
+class UnexpectedResponseShapeError(RuntimeError):
+    """A live API returned a shape the client cannot resolve.
+
+    Claim integrity: parsers are tolerant about WHERE a value lives but
+    never guess WHAT it is — an unresolvable response fails loudly with
+    this error instead of substituting a made-up value.
+    """
