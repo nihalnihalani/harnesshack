@@ -85,21 +85,34 @@ def _build_client():
     return Composio(api_key=api_key)
 
 
-def _active_toolkits(client, user_id: str) -> dict[str, str]:
-    """Map toolkit_slug(lower) -> status for this user's connected accounts."""
-    found: dict[str, str] = {}
+def _list_accounts(client, user_id: str) -> list[tuple[str, str, str]]:
+    """Return [(toolkit_slug_lower, account_id, status)] for this user."""
+    rows: list[tuple[str, str, str]] = []
     try:
         accounts = client.connected_accounts.list(user_ids=[user_id])
     except Exception as exc:  # noqa: BLE001 - surface the real API error
         print(f"could not list connected accounts: {exc}", file=sys.stderr)
-        return found
+        return rows
     items = getattr(accounts, "items", None) or getattr(accounts, "data", None) or []
     for acct in items:
         toolkit = getattr(acct, "toolkit", None)
         slug = getattr(toolkit, "slug", None) or getattr(acct, "toolkit_slug", None)
-        status = getattr(acct, "status", "UNKNOWN")
         if slug:
-            found[str(slug).lower()] = str(status)
+            acct_id = str(getattr(acct, "id", ""))
+            status = str(getattr(acct, "status", "UNKNOWN"))
+            rows.append((str(slug).lower(), acct_id, status))
+    return rows
+
+
+def _active_toolkits(client, user_id: str) -> dict[str, str]:
+    """Map toolkit_slug(lower) -> best status. A toolkit counts as ACTIVE if
+    ANY of its connected accounts is ACTIVE (a stale EXPIRED duplicate must not
+    mask a working connection — the last-write-wins bug this replaces)."""
+    found: dict[str, str] = {}
+    for slug, _id, status in _list_accounts(client, user_id):
+        prev = found.get(slug)
+        if prev is None or status.upper() == "ACTIVE":
+            found[slug] = status
     return found
 
 
@@ -169,13 +182,15 @@ def main(argv: list[str] | None = None) -> int:
     user_id = _user_id()
     print(f"Composio user_id: {user_id}")
 
-    existing = _active_toolkits(client, user_id)
-    if existing:
+    rows = _list_accounts(client, user_id)
+    if rows:
         print("Existing connected accounts:")
-        for slug, status in sorted(existing.items()):
-            print(f"  - {slug}: {status}")
+        for slug, acct_id, status in sorted(rows):
+            flag = "" if status.upper() == "ACTIVE" else "   <-- not usable"
+            print(f"  - {slug}: {status} ({acct_id}){flag}")
     elif args.check:
         print("No connected accounts found for this user_id.")
+    existing = _active_toolkits(client, user_id)
 
     results: dict[str, str] = {}
     for toolkit in args.toolkits:
