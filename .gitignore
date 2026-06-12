@@ -1,0 +1,25 @@
+# Secrets — never commit (CLAUDE.md auto-push rule makes this load-bearing)
+.env
+.env.*
+*.env
+!.env.example
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+
+# Local tooling & OS
+.claude/
+.DS_Store
+
+# Local databases / large demo artifacts
+*.db
+*.sqlite

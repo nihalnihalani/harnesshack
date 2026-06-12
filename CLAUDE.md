@@ -20,10 +20,16 @@ Won the war-room debate 7/7/7/8 (feasibility/novelty/prize-fit/demo) after 4 adv
 - **Reasoning LLM**: Claude (claude-fable-5) — postmortem drafting and runbook synthesis ONLY; everything classifiable goes to GLiNER2 first (the small-model-first economics are a judge talking point)
 - **Deploy**: Render — ONE `render.yaml` Blueprint, THREE services: `webhook-api` (FastAPI web service), `agent-worker` (Python background worker), `frontend` (Next.js web service). Skeleton deployed at T+0:25, not at the end
 
-### Project Structure
+### Project Status
+
+**PRE-BUILD.** This repo currently contains only the planning artifacts (CLAUDE.md, final-plan.md, demo-scripts.md, ideas.md, debate-log.md, sponsors.md, README.md). No application code exists yet — the structure below is the BUILD TARGET, created during the hackathon starting at T+0. Do not reference `apps/`, `libs/`, or `scripts/` paths as if they exist until the scaffold commit lands. First build actions: the T+0 auth sprint (Go/No-Go Gates below), then the scaffold + ClickHouse schema.
+
+### Project Structure (build target)
 
 ```text
 harnes/
+├── .gitignore                     # Secrets/venv/node_modules — load-bearing given the auto-push rule
+├── README.md
 ├── CLAUDE.md                      # This file — project rules
 ├── render.yaml                    # 3-service Render Blueprint (webhook-api, agent-worker, frontend)
 ├── final-plan.md                  # War-room output: build plan, prize mapping, risks
@@ -128,9 +134,9 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -r apps/api/requirements.txt -r apps/worker/requirements.txt
 # Core deps: fastapi uvicorn httpx clickhouse-connect langfuse composio airbyte-agent-sdk sentence-transformers
 
-# Frontend (scaffolded once via OpenUI CLI)
-npx @openuidev/cli@latest create --name frontend   # first time only
-cd apps/frontend && npm install && npm run dev      # port 3000
+# Frontend (scaffolded once via OpenUI CLI — CLI creates ./frontend at cwd, move it into apps/)
+cd apps && npx @openuidev/cli@latest create --name frontend   # first time only
+cd apps/frontend && npm install && npm run dev                 # port 3000
 
 # Run locally
 uvicorn apps.api.main:app --reload --port 8000      # webhook + SSE
