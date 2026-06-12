@@ -6,7 +6,7 @@ Harness Engineering Hack, June 12 2026. Sources: hackathon Discord (per-sponsor 
 
 | # | Service | Status | Why this rank | Time |
 |---|---|---|---|---|
-| 1 | Anthropic credits | ⏳ form submitted ~12:45 PM, awaiting email | Signup links EXPIRED 12:00 PM PT — escalate via #anthropic rep if no reply by ~1:15 | 5 min + wait |
+| 1 | Anthropic credits | ✅ **DONE 1:40 PM** — key in `.env`, claude-fable-5 call verified (end_turn) | Signup links EXPIRED 12:00 PM PT — credits landed via the form anyway | 5 min + wait |
 | 2 | Langfuse promo | ✅ **DONE 12:55 PM** — keys in `.env`, test span verified | Code `HARNESSHACK2026` "needs to be used TODAY" per ClickHouse slides | 10 min |
 | 3 | ClickHouse Cloud | ✅ **DONE 1:10 PM** — creds in `.env`, SELECT 1 verified, schema applied (events/metrics/airbyte_history) | $400 credits via QR — **QR not yet redeemed, account on 30-day trial; scan slide 9 to stack the credits** | 10 min |
 | 4 | Pioneer promo | ❌ | Code `SFJune2026Tokens` = Pro plan with $1,500 inference credits; blocks GLiNER2 hot path | 10 min |
@@ -31,7 +31,7 @@ Judging: 5 criteria × 20% each — Idea, Technical Implementation, Tool Use (�
 
 ## 1. Anthropic (`ANTHROPIC_API_KEY`) — ~$35 credits
 
-**Status: ⏳ form submitted ~12:45 PM June 12, no email yet.** If nothing by ~1:15 PM, ping **bruh-moment** in #anthropic and email gagan@anthropic.com in parallel. Backup: Nihal's credits were approved at 11:54 AM — a key from his Console unblocks the app meanwhile.
+**Status: ✅ DONE 1:40 PM June 12.** Credits landed despite the noon link expiry; key in `.env`. Verified with a live `claude-fable-5` Messages call (`stop_reason: end_turn`, 16 in / 16 out tokens). Note: credits are ~$35 and Fable 5 is $10/$50 per MTok — postmortem drafting only, GLiNER2 stays the hot path (which is the architecture anyway).
 
 1. Form: https://forms.gle/gNGK5EBDYymUWxaGA → single-use claude.com/offers link emailed to the Google account you submit with. One link per person. **Links expired June 12, 12:00 PM PT.**
 2. If expired/rejected: ping the Anthropic rep **bruh-moment** in #anthropic (he approved a rejected request in ~2 min at 11:54 AM) or email **gagan@anthropic.com**.
