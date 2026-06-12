@@ -155,14 +155,14 @@ class TestChokePointStructure:
         }
         assert public_senders == {"post_slack_update", "create_jira_followup"}
 
-    def test_only_the_choke_point_touches_the_composio_session(self):
+    def test_only_the_choke_point_touches_the_composio_client(self):
         touchers = {
             name
             for name, fn in self._module_functions().items()
-            if name != "_get_session" and "_get_session(" in inspect.getsource(fn)
+            if name != "_get_client" and "_get_client(" in inspect.getsource(fn)
         }
         assert touchers == {"_screened_send"}, (
-            "the Composio session may ONLY be reached from _screened_send"
+            "the Composio client may ONLY be reached from _screened_send"
         )
 
     def test_no_public_function_executes_directly(self):

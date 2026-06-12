@@ -19,6 +19,7 @@ out/
 # Local tooling & OS
 .claude/
 .DS_Store
+.composio-cache/
 
 # Local databases / large demo artifacts
 *.db

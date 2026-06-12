@@ -14,8 +14,10 @@ which can ONLY send through `_screened_send`. There is no other send path.
   (b) Idempotency check per incident_id+state+action. In-process registry
       for now; ClickHouse-backed durable dedupe (events-table lookup)
       replaces it when B2 lands.
-  (c) Execution via the Composio SDK session. Connections are established
-      with `session.link()` at the T+0:10 gate — NEVER the deprecated
+  (c) Execution via the Composio SDK: `client.tools.execute(slug,
+      arguments=..., user_id=...)`. Connections are pre-authorized once with
+      `connected_accounts.link()` / `toolkits.authorize()` (run
+      scripts/composio_link.py at the T+0:10 gate) — NEVER the deprecated
       `initiate()` (legacy endpoints already 410; cutover 2026-07-03).
 
 Owner wording (claim integrity): outbound text says
@@ -25,17 +27,22 @@ confirm; the agent recommends.
 Raises NotConfiguredError naming B7 while COMPOSIO_API_KEY is unset. Never
 fakes a send result on any path.
 
-ON-SITE CONFIRMATION REQUIRED (B7): the exact Composio v0.13 execute-call
-shape (`session.tools.execute(slug, arguments=...)`) and the
-SLACK_SEND_MESSAGE / JIRA_CREATE_ISSUE argument field names follow the
-documented SDK pattern (sponsors.md) — confirm against the live SDK when B7
-lands.
+CONTRACT VERIFIED (B7, 2026-06-12) against the INSTALLED SDK (composio
+0.13.1 / core 1.0.0-rc2): there is NO per-call "session" — `tools`,
+`connected_accounts`, `toolkits` all hang off the `Composio` instance, and
+`tools.execute(slug, arguments, *, user_id=...)` routes to the user's
+connected account by `user_id`. The earlier `session.create()/session.link()`
+authoring was wrong (introspected signatures). The SLACK_SEND_MESSAGE /
+JIRA_CREATE_ISSUE argument field names below still follow the documented
+pattern — scripts/composio_link.py prints each tool's live input schema so
+they can be confirmed the moment the key + OAuth land.
 """
 
 from __future__ import annotations
 
 import logging
 import os
+import tempfile
 from collections.abc import Callable
 from functools import partial
 from typing import Any
@@ -93,10 +100,21 @@ def _default_screener(text: str) -> ScreenResult:
     return with_retries(partial(screen, text), service="pioneer-gliguard")
 
 
-def _get_session() -> Any:
-    """Real Composio SDK session — NotConfiguredError naming B7 keyless.
+def _composio_user_id() -> str:
+    """The Composio user_id that owns the Slack/Jira connected accounts.
 
-    Connections were pre-authorized via `session.link()` for Slack
+    MUST match the user_id scripts/composio_link.py authorized with —
+    tools.execute routes to a connected account by this id.
+    """
+    return os.environ.get("COMPOSIO_USER_ID", "").strip() or "incident-sherpa"
+
+
+def _get_client() -> Any:
+    """Real Composio SDK client — NotConfiguredError naming B7 keyless.
+
+    Returns the `Composio` instance itself (the verified SDK has NO per-call
+    session). Connections were pre-authorized via
+    `connected_accounts.link()` / `toolkits.authorize()` for Slack
     (chat:write) and Jira (create) at the T+0:10 gate. NEVER call the
     deprecated `initiate()`.
     """
@@ -105,12 +123,16 @@ def _get_session() -> Any:
         raise NotConfiguredError(
             "Composio not configured: set COMPOSIO_API_KEY — see BUILD-STATE.md B7"
         )
+    # The SDK writes a cache to ~/.composio at import; pin it to a guaranteed
+    # writable dir so a read-only home (some container runtimes) can't crash
+    # the import. Honor an explicit COMPOSIO_CACHE_DIR if the operator set one.
+    os.environ.setdefault(
+        "COMPOSIO_CACHE_DIR", os.path.join(tempfile.gettempdir(), "composio-cache")
+    )
     # Imported lazily so the unconfigured path has zero side effects.
     from composio import Composio
 
-    composio = Composio(api_key=api_key)
-    user_id = os.environ.get("COMPOSIO_USER_ID", "").strip() or "incident-sherpa"
-    return composio.create(user_id=user_id)
+    return Composio(api_key=api_key)
 
 
 def _action_arguments(action: str, text: str) -> dict[str, Any]:
@@ -168,10 +190,13 @@ def _screened_send(
             "idempotency_scope": idempotency_scope,
         }
 
-    session = _get_session()  # NotConfiguredError (B7) keyless
+    client = _get_client()  # NotConfiguredError (B7) keyless
+    user_id = _composio_user_id()
 
     def _execute() -> Any:
-        return session.tools.execute(action, arguments=_action_arguments(action, text))
+        return client.tools.execute(
+            action, arguments=_action_arguments(action, text), user_id=user_id
+        )
 
     response = call_traced(
         f"composio.execute.{action}",
