@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Postmortem (cached real run) — inc-demo-ui-001</title><style>body{background:#0b0e14;color:#d6deeb;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;padding:2rem;max-width:72ch;margin:auto}pre{white-space:pre-wrap}.banner{color:#8a93a5;border:1px solid #2a3040;padding:.5rem .75rem;border-radius:6px;margin-bottom:1rem}</style></head><body><p class="banner">Cached output of a REAL completed postmortem run for incident inc-demo-ui-001 (generated 2026-06-12T23:32:21.002730+00:00). Shown via F2 fallback because the live stream is unavailable.</p><pre>## Timeline
+
+| Time (UTC) | Event |
+|---|---|
+| 2026-06-12T14:15:00Z | Alert metric timestamp: `payments-service` p99_ms = 2466.1 |
+| 23:31:08 | Alert received |
+| 23:31:09 | Incident `inc-demo-ui-001` opened → INVESTIGATING |
+| 23:31:14 | Extraction completed (model: gliner2): affected service `payments-service`, severity P3 |
+| 23:31:15 | Causal chains detected (ClickHouse window-function query) |
+| 23:31:21 | Runbook retrieved: payments-p99-runbook.md (6cff5947-9f1e-430e-9e8b-c9eedfc4f15a) |
+| 23:31:25 | Ownership suggestion attempted — **no owner identified** (suggested_owner: null, &quot;awaiting confirmation&quot;) |
+| 23:31:27 | Airbyte context lookup **SKIPPED_NOT_CONFIGURED** (blocker B5) |
+| 23:31:28 | Runbook step selected: &quot;Confirm blast radius via the causal graph.&quot; |
+| 23:31:29 | State: INVESTIGATING → MITIGATING |
+| 23:31:50 | State: MITIGATING → RESOLVED (resolved by human) |
+
+## Root Cause
+
+- Detected anomaly-onset causal chain: **`payments-db-primary` → `payments-service`** (lag 135 s) → **`checkout-service`** (lag 55 s).
+- The chain points to `payments-db-primary` as the earliest anomaly onset; the log records **no confirmed mechanism** (e.g., no config change, deploy, or saturation evidence captured).
+- Prior institutional context on payments p99 breaches exists [citation: runbook-payments-service-p99-latency-breach.md (6e37305c-ab53-4e63-9a69-29f042df937b)], but applies as past context only — not as evidence for this incident.
+
+## Impact
+
+- `payments-service`: p99_ms reached **2466.1** at metric timestamp 2026-06-12T14:15:00Z. Severity classified **P3**.
+- `checkout-service`: downstream anomaly onset detected 55 s after payments-service.
+- No user counts, error rates, revenue figures, or duration-of-impact metrics were recorded in the log; impact scope beyond the above is unknown.
+
+## Action Items
+
+- **Confirm service ownership** for `payments-service`: the ownership lookup returned `suggested_owner: null` against [citation: service-ownership-map-payments-and-checkout-surfaces.md (40647b53-6f08-43e4-bd42-dbdb95187caa)] — map needs a confirmed owner.
+- **Resolve blocker B5**: Airbyte context lookup is SKIPPED_NOT_CONFIGURED (Agent Engine client lands in Phase 5 per BUILD-STATE.md); enable or document workaround.
+- **Investigate `payments-db-primary`**: causal analysis flagged it as the upstream onset, but no root-cause evidence was captured — follow up to confirm mechanism.
+- **Capture impact metrics in future incidents**: log contains no user/error-rate data, leaving the Impact section incomplete.</pre></body></html>
