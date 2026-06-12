@@ -83,6 +83,11 @@ shutdown: 12 ticks, 48 rows inserted   (continuous-flow path verified live)
 
 | Date | Decision | Basis |
 |---|---|---|
+| 2026-06-13 (firing 10) | **GUILD PATH — DECISION NEEDED (escalated to user).** The Python REST descope assumed app.guild.ai exposes /v1/sessions; it does not (that host is the Agent Hub API + SPA). Three real options: **(A) Find the actual control-plane API base** — ask the sponsor rep for the Sessions/Credentials/audit REST host + auth (keeps the pure-Python architecture). **(B) Adopt `@guildai/agents-sdk@0.2.55` (TS, now installable via PAT)** in a small Node sidecar the Python worker calls for session create/append/close — real Guild SDK use, strongest prize fit, but adds a TS process to the 3-service deploy. **(C) Descope Guild to a local append-only audit log** (ClickHouse `events` already IS a dual sink) and drop/reduce the $2,800 Guild claim — fastest, weakest prize fit. NO FAKING either way: the agent's dual-sink already writes every event to ClickHouse, so the event log (the product) is intact regardless; only the Guild-audit second sink + prize is in question. Recorded, not yet chosen. | live API probing of app.guild.ai; PAT registry auth success |
+
+
+| Date | Decision | Basis |
+|---|---|---|
 | 2026-06-12 | **Frontend scaffold = OpenUI CLI primary path** — `cd apps && npx @openuidev/cli@latest create --name frontend` succeeded on attempt 1 (no create-next-app fallback needed). Removed the template's OpenAI chat route (`src/app/api/chat`) + `openai` dep: wrong provider for this stack (Claude only) and `new OpenAI()` at module scope breaks keyless builds. Kept `@openuidev/react-{lang,headless,ui}` for Phase 6 components. | CLI output; CLAUDE.md architecture (Claude-only reasoning LLM) |
 | 2026-06-12 | **Guild path = REST descope (primary).** `@guildai/agents-sdk` lives on Guild's PRIVATE npm registry (app.guild.ai/npm, 401 without auth) — not public npm. libs/guild will be built REST-first per CLAUDE.md's descope spec. If a Guild PAT later grants registry access, SDK becomes an optional upgrade, not a rewrite. | `npm view` 401 output above |
 | 2026-06-12 | Phase 1 scaffold proceeds during Phase 0 blockage per the never-idle guardrail (scaffold needs no credentials). | Loop guardrails |
@@ -91,7 +96,7 @@ shutdown: 12 ticks, 48 rows inserted   (continuous-flow path verified live)
 
 | # | Service | Env var(s) | Where to get it | Verification command (runs automatically next firing) |
 |---|---|---|---|---|
-| B1 | Guild.ai | `GUILD_PAT`, `GUILD_API_BASE` | guild.ai → open beta signup → `npm i @guildai/cli -g && guild auth login` (account may need a Guild contact / hackathon rep) | REST session create probe + retry `npm view` with registry auth |
+| B1 | Guild.ai | `GUILD_PAT` set, `GUILD_API_BASE` set | **PAT VALID but DECISION NEEDED (2026-06-13, firing 10).** `GUILD_API_BASE=https://app.guild.ai` is the **Agent Hub API** (`/api/me`→user charliegillet, `/api/agents`→hub listings); the assumed REST descope endpoints `/v1/sessions`,`/v1/sessions/{id}/events` return the SPA HTML (don't exist there); `/api/sessions` 404. The control-plane Sessions/Credentials/audit API is NOT on app.guild.ai. **HOWEVER the PAT now authenticates the private npm registry: `@guildai/agents-sdk@0.2.55` + `@guildai/cli@0.12.3` are installable** (.npmrc `//app.guild.ai/npm/:_authToken=$GUILD_PAT`). See DECISIONS for the 3 options. | resolved once a Guild path is chosen + a real session/audit call succeeds |
 | ~~B2~~ | ~~ClickHouse Cloud~~ | **RESOLVED firing 10 (2026-06-13)** — creds in .env (host zr8in8fpga.us-west-2.aws.clickhouse.cloud), `SELECT 1` → 1 over HTTPS. All three pre-written gates ran green: replay.py --truncate-first --speed 100 (960 rows / 240 ticks), `pytest -m live` 1 passed (real payments-db-primary→payments-service causal edge asserted on the cluster), load_generator --inject db_pool_exhaustion --max-ticks 80 (320 rows, p99 breach detected t+250s after injection) | — | done |
 | ~~B2~~ | ~~ClickHouse~~ | **RESOLVED (2026-06-13)** — SELECT 1 in 2088ms (server 25.12.1, us-west-2); schema applied (events 397ms, metrics 244ms, airbyte_history 388ms); replay 960 rows/150.2s at --speed 100; causal gate PASSED; load_generator live-injected 48 rows/12 ticks | — | done |
 | ~~B3~~ | ~~Langfuse~~ | **RESOLVED firing 9 (2026-06-13)** — live span via libs/tracing @traced, confirmed by API readback: trace c0d181911da7b49e093fad9c843095e9, visible after 20s. Fix required first: tracing.py was v3-API, installed SDK is 4.7.1 (see DECISIONS + CLAUDE.md Learned Rules) | — | done |
@@ -122,6 +127,7 @@ Absorbed at firing 8. CHANGES TO THE PLAN:
 | Causal-chain query (960-row window, live cluster) | 263 ms | find_causal_chains(window_minutes=20) | 2026-06-13 |
 | **Causal lag, DB→payments (THE demo number)** | **135 s (2m15s)** | live lagInFrame onset pairing | 2026-06-13 |
 | Causal lag, payments→checkout (cascade) | 55 s | same query | 2026-06-13 |
+| Anthropic claude-fable-5 round-trip (8 max_tokens) | 4335 ms | anthropic.messages.create | 2026-06-13 |
 | Replay throughput | 960 rows / 150.2 s at --speed 100 | scripts/replay.py | 2026-06-13 |
 | Langfuse ingestion visibility lag | ~20 s | API readback poll, 5s interval | 2026-06-13 |
 
