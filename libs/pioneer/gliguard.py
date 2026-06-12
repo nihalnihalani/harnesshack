@@ -10,14 +10,19 @@ Raises NotConfiguredError naming B4 while PIONEER_API_KEY is unset. Never
 returns fake data on any path — in particular it NEVER defaults to
 "allowed" when the response is unparseable.
 
-CLAIM INTEGRITY: latency_ms is the MEASURED wall-clock of the HTTP call.
+CONTRACT CONFIRMED LIVE (2026-06-12, keycheck team): the hosted model is
+`fastino/gliguard-LLMGuardrails-300M` and uses the SAME unified /inference
+grammar as GLiNER2 — `model_id` + `text` + `schema`, where the moderation ask
+is a classification task `prompt_safety` with labels ["safe", "unsafe"]
+(the API rejects classification tasks with fewer than 2 labels). Response
+envelope: result.data.prompt_safety.{label, confidence} plus a top-level
+SERVER-reported latency_ms (392ms warm; cold start can take >10s wall —
+callers' retry/timeout budgets must tolerate that). The previous
+{"model": "gliguard", "input": text} shape 422s and was the pre-firing-11
+authored guess that never got the GLiNER2 rewrite.
 
-ON-SITE CONFIRMATION REQUIRED (B4): exact response-shape field names must be
-confirmed against the live API when B4 lands. `parse_screen_response` is
-tolerant about container nesting and verdict key spelling
-(allowed/safe/flagged) but FAILS LOUDLY (UnexpectedResponseShapeError) when
-no explicit verdict is resolvable — an ambiguous moderation response is
-treated as an error, never as a pass.
+CLAIM INTEGRITY: latency_ms prefers the SERVER-reported inference time (the
+model-speed number a badge may cite); client wall-clock only as fallback.
 """
 
 from __future__ import annotations
@@ -36,20 +41,26 @@ from libs.tracing import call_traced
 logger = logging.getLogger("incidentsherpa.pioneer.gliguard")
 
 PIONEER_INFERENCE_URL = "https://api.pioneer.ai/inference"
-MODEL = "gliguard"
+MODEL_ID = "fastino/gliguard-LLMGuardrails-300M"
+SAFETY_TASK = "prompt_safety"
+SAFETY_LABELS = ("safe", "unsafe")
+# Cold starts measured >10s wall (server latency_ms itself stays ~400ms);
+# the generous timeout is deliberate — a slow screen beats an unscreened send.
 _TIMEOUT_SECONDS = 30.0
-
-_RESULT_CONTAINER_KEYS = ("output", "result", "results", "data", "moderation", "predictions")
-_CATEGORY_KEYS = ("categories", "violations", "flags", "labels")
 
 
 @dataclass(frozen=True)
 class ScreenResult:
-    """GLiGuard moderation verdict with the MEASURED call latency."""
+    """GLiGuard moderation verdict with the MEASURED latency.
+
+    `confidence` is the classifier's confidence in its label (0.0 when the
+    caller constructed the result without one, e.g. in tests).
+    """
 
     allowed: bool
     categories: tuple[str, ...]
     latency_ms: float
+    confidence: float = 0.0
 
 
 def _api_key() -> str:
@@ -62,59 +73,52 @@ def _api_key() -> str:
 
 
 def build_screen_request(text: str) -> dict[str, Any]:
-    """Build the GLiGuard moderation inference request body."""
-    return {"model": MODEL, "input": text}
+    """Build the GLiGuard moderation inference request body.
 
-
-def _find_verdict_container(data: Any) -> dict[str, Any]:
-    candidates: list[Any] = [data]
-    if isinstance(data, dict):
-        candidates.extend(data.get(key) for key in _RESULT_CONTAINER_KEYS)
-    for candidate in candidates:
-        if isinstance(candidate, list) and candidate and isinstance(candidate[0], dict):
-            candidate = candidate[0]
-        if isinstance(candidate, dict) and (
-            "allowed" in candidate or "safe" in candidate or "flagged" in candidate
-        ):
-            return candidate
-    raise UnexpectedResponseShapeError(
-        "GLiGuard response has no resolvable verdict (allowed/safe/flagged) — an "
-        "ambiguous moderation response is NEVER treated as a pass; confirm the live "
-        f"response shape when B4 lands (got: {str(data)[:300]!r})"
-    )
-
-
-def parse_screen_response(data: Any) -> tuple[bool, tuple[str, ...]]:
-    """Parse (allowed, categories) from a GLiGuard moderation response.
-
-    Requires an EXPLICIT boolean verdict under one of allowed/safe/flagged
-    (flagged is inverted). Categories are optional (empty when absent).
-    Unresolvable responses raise UnexpectedResponseShapeError — never a
-    default-allow.
+    Confirmed live contract: model_id + text + a unified `schema` whose
+    moderation ask is the prompt_safety classification with BOTH labels
+    (the API requires >=2 labels per classification task). Role separation
+    (Learned Rules): no entity extraction in a moderation request.
     """
-    container = _find_verdict_container(data)
-    if "allowed" in container:
-        verdict, invert = container["allowed"], False
-    elif "safe" in container:
-        verdict, invert = container["safe"], False
-    else:
-        verdict, invert = container["flagged"], True
-    if not isinstance(verdict, bool):
+    return {
+        "model_id": MODEL_ID,
+        "text": text,
+        "schema": {"classifications": {SAFETY_TASK: list(SAFETY_LABELS)}},
+    }
+
+
+def parse_screen_response(data: Any) -> tuple[bool, tuple[str, ...], float]:
+    """Parse (allowed, categories, confidence) from a GLiGuard response.
+
+    Real envelope: data.result.data.prompt_safety.{label, confidence}.
+    Strict: the label must be exactly "safe" or "unsafe" — anything else
+    raises UnexpectedResponseShapeError. An unresolvable response is NEVER
+    treated as a pass.
+    """
+    if not isinstance(data, dict):
         raise UnexpectedResponseShapeError(
-            f"GLiGuard verdict {verdict!r} is not an explicit boolean — refusing to "
-            "guess; confirm the live response shape when B4 lands"
+            f"GLiGuard response is not a dict: {str(data)[:200]!r}"
         )
-    allowed = (not verdict) if invert else verdict
-    categories: tuple[str, ...] = ()
-    for key in _CATEGORY_KEYS:
-        raw = container.get(key)
-        if isinstance(raw, list):
-            categories = tuple(str(item) for item in raw)
-            break
-        if isinstance(raw, dict):  # e.g. {"harm": true, "jailbreak": false}
-            categories = tuple(sorted(name for name, hit in raw.items() if hit))
-            break
-    return allowed, categories
+    container = (data.get("result") or {}).get("data")
+    if not isinstance(container, dict) or SAFETY_TASK not in container:
+        raise UnexpectedResponseShapeError(
+            f"GLiGuard response has no result.data.{SAFETY_TASK} — an ambiguous "
+            f"moderation response is NEVER a pass (got: {str(data)[:300]!r})"
+        )
+    verdict_block = container[SAFETY_TASK]
+    label = verdict_block.get("label") if isinstance(verdict_block, dict) else verdict_block
+    if label not in SAFETY_LABELS:
+        raise UnexpectedResponseShapeError(
+            f"GLiGuard label {label!r} is not one of {SAFETY_LABELS} — refusing to guess"
+        )
+    confidence = (
+        float(verdict_block.get("confidence", 0.0))
+        if isinstance(verdict_block, dict)
+        else 0.0
+    )
+    allowed = label == "safe"
+    categories: tuple[str, ...] = () if allowed else (SAFETY_TASK,)
+    return allowed, categories, confidence
 
 
 def screen(text: str) -> ScreenResult:
@@ -137,17 +141,27 @@ def screen(text: str) -> ScreenResult:
             timeout=_TIMEOUT_SECONDS,
         )
         response.raise_for_status()
-        latency_ms = (time.perf_counter() - start) * 1000.0
-        return response.json(), latency_ms
+        wall_ms = (time.perf_counter() - start) * 1000.0
+        return response.json(), wall_ms
 
-    data, latency_ms = call_traced("pioneer.gliguard.screen", _call, logger=logger)
-    allowed, categories = parse_screen_response(data)
-    return ScreenResult(allowed=allowed, categories=categories, latency_ms=latency_ms)
+    data, wall_ms = call_traced("pioneer.gliguard.screen", _call, logger=logger)
+    allowed, categories, confidence = parse_screen_response(data)
+    # Prefer the SERVER-reported inference latency; wall-clock as fallback.
+    server_ms = data.get("latency_ms") if isinstance(data, dict) else None
+    latency_ms = float(server_ms) if isinstance(server_ms, (int, float)) else wall_ms
+    return ScreenResult(
+        allowed=allowed,
+        categories=categories,
+        latency_ms=latency_ms,
+        confidence=confidence,
+    )
 
 
 __all__ = [
-    "MODEL",
+    "MODEL_ID",
     "PIONEER_INFERENCE_URL",
+    "SAFETY_LABELS",
+    "SAFETY_TASK",
     "ScreenResult",
     "build_screen_request",
     "parse_screen_response",

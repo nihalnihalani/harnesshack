@@ -25,3 +25,6 @@ out/
 # Local databases / large demo artifacts
 *.db
 *.sqlite
+
+# Run logs (run.sh)
+logs/
