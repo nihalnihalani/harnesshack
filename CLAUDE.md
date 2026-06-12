@@ -325,6 +325,7 @@ Use agent teams for any task that benefits from parallel work across independent
 - 2026-06-12 — GLiGuard is a safety-moderation model (safety/jailbreak/harm/refusal), NOT a severity classifier; severity extraction uses GLiNER2 schema-conditioned inference — a CTO judge reading the Fastino paper would have killed the Pioneer claim in Q&A (debate-log.md Round 3)
 - 2026-06-12 — Never put an unmeasured latency number in demo material; use `[measured]ms` placeholders until the T+0:15 test call records the real value
 - 2026-06-12 — Use Composio `session.link()`, never `initiate()` (deprecated, cutover 2026-07-03; legacy v1/v2 endpoints already return 410)
+- 2026-06-13 — libs/tracing was authored against the Langfuse v3 API but 4.7.1 (v4 rewrite) is installed: `start_as_current_span` → `start_as_current_observation(name=..., as_type="span")`. Credential-free unit tests only exercised the unconfigured path, so the mismatch surfaced at the FIRST live call. Rule: when authoring against an SDK without credentials, introspect the INSTALLED version's API surface (dir/signature) — never assume from memory.
 
 ## Task Management
 

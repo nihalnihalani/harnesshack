@@ -76,7 +76,10 @@ def traced(name: str) -> Callable[[F], F]:
         @functools.wraps(fn)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             client = get_langfuse()  # raises NotConfiguredError when blocked (B3)
-            with client.start_as_current_span(name=name) as span:
+            # langfuse v4 API (4.7.1): spans are observations with as_type="span";
+            # v3's start_as_current_span does not exist — caught by the first
+            # live B3 verification (BUILD-STATE.md, firing 9).
+            with client.start_as_current_observation(name=name, as_type="span") as span:
                 try:
                     result = fn(*args, **kwargs)
                 except Exception as exc:

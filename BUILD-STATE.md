@@ -3,7 +3,7 @@
 > Handoff memory between loop firings. Cold readers: read CLAUDE.md first for project law.
 > Loop: cron job `459218a5`, every 20 min. Started 2026-06-12.
 
-**Current phase: 2 (blocked on B2 ClickHouse). Phase 8 credential-free portion + Phase 9 docs COMPLETE (firing 8, commits 24b518b..53f822f: webhook bearer auth + per-IP rate limit w/ 16 tests, structured JSON logging, pip-audit 4/4 fixed, npm audit 20 fixed + 6 accepted w/ rationale, secrets sweep 0 hits in 24,559 patch lines, no-mock sweep 97/97 triaged zero needs-fix, README + docs/ARCHITECTURE.md; verified: 231 passed / 1 live-deselected, ruff clean, CI 27439383731 green). REPO IS CODE-COMPLETE FOR ALL PHASES (verified firing 6: 208 tests / 1 live-deselected, ruff clean, CI 27437375093 green, npm build clean). Phase 6 authoring landed (commits fbc5098..e82501f): stenographer postmortem (verbatim-log sentinels, buffer→GLiGuard-screen→replay-at-measured-pace, zero-leak on block), lifecycle endpoints (/resolve, /confirm-owner, agent-wired /trigger), full war-room frontend (timeline, stepper, causal graph w/ real SQL popover, measured-only latency badges, F2 disabled until a real run caches the artifact — correctly absent from demo_assets/). NOTHING LEFT TO BUILD WITHOUT CREDENTIALS. Both escalations sent (firings 3 and 6). Every firing from here: re-test .env → on key landing run the pre-written gates.**
+**Current phase: 2 (blocked on B2 ClickHouse). B3 LANGFUSE RESOLVED + verified live (firing 9; v3→v4 API fix shipped). Phase 8 credential-free portion + Phase 9 docs COMPLETE (firing 8, commits 24b518b..53f822f: webhook bearer auth + per-IP rate limit w/ 16 tests, structured JSON logging, pip-audit 4/4 fixed, npm audit 20 fixed + 6 accepted w/ rationale, secrets sweep 0 hits in 24,559 patch lines, no-mock sweep 97/97 triaged zero needs-fix, README + docs/ARCHITECTURE.md; verified: 231 passed / 1 live-deselected, ruff clean, CI 27439383731 green). REPO IS CODE-COMPLETE FOR ALL PHASES (verified firing 6: 208 tests / 1 live-deselected, ruff clean, CI 27437375093 green, npm build clean). Phase 6 authoring landed (commits fbc5098..e82501f): stenographer postmortem (verbatim-log sentinels, buffer→GLiGuard-screen→replay-at-measured-pace, zero-leak on block), lifecycle endpoints (/resolve, /confirm-owner, agent-wired /trigger), full war-room frontend (timeline, stepper, causal graph w/ real SQL popover, measured-only latency badges, F2 disabled until a real run caches the artifact — correctly absent from demo_assets/). NOTHING LEFT TO BUILD WITHOUT CREDENTIALS. Both escalations sent (firings 3 and 6). Every firing from here: re-test .env → on key landing run the pre-written gates.**
 
 ## Phase checklist
 
@@ -74,7 +74,7 @@ is open; idempotency keys register at receipt (durable dedupe → Phase 2).
 |---|---|---|---|---|
 | B1 | Guild.ai | `GUILD_PAT`, `GUILD_API_BASE` | guild.ai → open beta signup → `npm i @guildai/cli -g && guild auth login` (account may need a Guild contact / hackathon rep) | REST session create probe + retry `npm view` with registry auth |
 | B2 | ClickHouse Cloud | `CLICKHOUSE_HOST`, `CLICKHOUSE_USER`, `CLICKHOUSE_PASSWORD` | clickhouse.cloud → free trial (no credit card) | `python3 -c "import clickhouse_connect; print(clickhouse_connect.get_client(...).query('SELECT 1').result_rows)"` |
-| B3 | Langfuse | `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` | cloud.langfuse.com → new project → API keys | test span emitted + visible via API |
+| ~~B3~~ | ~~Langfuse~~ | **RESOLVED firing 9 (2026-06-13)** — live span via libs/tracing @traced, confirmed by API readback: trace c0d181911da7b49e093fad9c843095e9, visible after 20s. Fix required first: tracing.py was v3-API, installed SDK is 4.7.1 (see DECISIONS + CLAUDE.md Learned Rules) | — | done |
 | B4 | Pioneer (Fastino) | `PIONEER_API_KEY` | pioneer.ai → Settings → API Keys | GLiNER2 severity-schema call, latency MEASURED; GLiGuard screen on sample text |
 | B5 | Airbyte | `AIRBYTE_CLIENT_ID`, `AIRBYTE_CLIENT_SECRET` | cloud.airbyte.com → settings → applications | workspace list + GitHub/Jira connector visibility |
 | B6 | Senso.ai | `SENSO_API_KEY` | senso.ai signup ($100 free tier, no CC) | `senso whoami` / REST doc-list |
@@ -97,7 +97,8 @@ Absorbed at firing 8. CHANGES TO THE PLAN:
 
 | Metric | Value | Command | Date |
 |---|---|---|---|
-| *(empty — populated as credentials land; no number ships to the UI without a row here)* | | | |
+| Langfuse first-span wall time (incl. client init; NOT a per-span figure) | 1123 ms | `@traced('b3-live-verification') probe()` via libs/tracing | 2026-06-13 |
+| Langfuse ingestion visibility lag | ~20 s | API readback poll, 5s interval | 2026-06-13 |
 
 ## Blocker age (escalation counter — louder message at 3 consecutive firings)
 
