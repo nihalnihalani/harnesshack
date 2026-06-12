@@ -507,3 +507,18 @@ class IncidentAgent:
                     {"service": "guild", "step": "close_session", "error": str(exc)},
                 )
         return self.state
+
+
+if __name__ == "__main__":
+    # render.yaml agent-worker entrypoint: `python -m apps.worker.agent`.
+    # Loads the domain model under structured JSON logging and exits; the
+    # long-running incident loop lands once credentials (B1/B2...) exist.
+    import logging
+
+    from libs.logging_config import configure_logging
+
+    configure_logging()
+    logging.getLogger("incidentsherpa.worker").info(
+        "agent-worker domain model loaded — long-running loop is credential-gated",
+        extra={"service": "agent-worker", "states": [s.value for s in IncidentState]},
+    )

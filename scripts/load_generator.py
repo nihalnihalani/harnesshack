@@ -40,6 +40,7 @@ if str(REPO_ROOT) not in sys.path:
 from libs.clickhouse import get_client
 from libs.clickhouse.schema import METRICS_TABLE_DDL
 from libs.errors import NotConfiguredError
+from libs.logging_config import configure_logging
 from scripts import incident_profile as profile
 from scripts.tracing_glue import call_traced
 
@@ -161,7 +162,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--seed", type=int, default=None, help="seed the RNG (reproducible runs)")
     args = parser.parse_args(argv)
 
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
+    configure_logging()
     signal.signal(signal.SIGINT, _handle_sigint)
 
     try:

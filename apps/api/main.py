@@ -36,7 +36,11 @@ from apps.worker.postmortem import (
 )
 from libs.clickhouse import record_event
 from libs.errors import NotConfiguredError
+from libs.logging_config import configure_logging
 
+# This module IS the webhook-api entrypoint (uvicorn apps.api.main:app) —
+# structured JSON-lines logging is configured here, idempotently.
+configure_logging()
 logger = logging.getLogger("incidentsherpa.api")
 
 app = FastAPI(title="IncidentSherpa webhook API", version="0.1.0")

@@ -34,6 +34,7 @@ if str(REPO_ROOT) not in sys.path:
 from libs.clickhouse import get_client
 from libs.clickhouse.schema import METRICS_TABLE_DDL
 from libs.errors import NotConfiguredError
+from libs.logging_config import configure_logging
 from scripts.tracing_glue import call_traced
 
 DEFAULT_CSV = REPO_ROOT / "demo_assets" / "incident_metrics.csv"
@@ -132,7 +133,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--csv", type=Path, default=DEFAULT_CSV, help="recorded incident CSV")
     args = parser.parse_args(argv)
 
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
+    configure_logging()
 
     try:
         call_traced(
