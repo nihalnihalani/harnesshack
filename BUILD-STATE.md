@@ -88,7 +88,7 @@ TWO degrade fixes made so the postmortem completes when enrichment is unavailabl
 2. GLiGuard screen distinguishes BLOCKED (real refusal → still fails closed, no stream) from UNAVAILABLE (not hosted → streams to the operator's OWN UI with a loud DEGRADED event + `screened: false` on postmortem_complete). Composio EXTERNAL-send choke-point stays hard fail-closed (unchanged). Claim integrity: never claims a screen happened when it didn't.
 GLiGuard local fallback checked: HF models gliguard-* return 401 (gated/need license+torch) — not a quick win; the explicit-degrade path is the honest interim.
 3 regression tests added (TestDegradeNotDie). 230 tests green, ruff clean.
-**FINDING (demo perf):** the postmortem took 60.3s end-to-end — OVER the demo's ≤30s gate. The buffer-then-replay-at-model-pace is the cost. Flag for Phase 6/9: cap replay delay tighter or accept a faster draft. Recorded, not yet tuned.
+**FINDING (demo perf) — FIXED firing 17:** postmortem was 60.3s (>30s gate). Root cause split: ~21s claude-fable-5 generation (16000 max_tokens, no concision directive → 6000-char draft) + ~15s replay (1.0s/chunk cap too loose). Fixes: prompt now requests a ~350-word concise postmortem (stenographer HARD RULES unchanged); _MAX_OUTPUT_TOKENS 16000→1200; _MAX_REPLAY_DELAY_SECONDS 1.0→0.10. **Re-measured live: 22.3s for 2365 chars / 25 chunks — PASSES the ≤30s gate** (~8s margin; remaining time is honest model generation). 230 tests green.
 
 ## FIRING-15 — Phase 5 Airbyte agent-sdk probe (credential live, connectors missing)
 - `pip install airbyte-agent-sdk` → v0.1.242 (pinned in apps/worker/requirements.txt). `a.configure(client_id, client_secret)` authenticates with no error against the verified workspace.
@@ -169,6 +169,8 @@ Absorbed at firing 8. CHANGES TO THE PLAN:
 | Causal lag, payments→checkout (cascade) | 55 s | same query | 2026-06-13 |
 | Anthropic claude-fable-5 round-trip (8 max_tokens) | 4335 ms | anthropic.messages.create | 2026-06-13 |
 | GLiNER2 in-agent extraction (faithful alert sentence) | severity P3, conf 0.648, 154-164ms | IncidentAgent.ingest_alert live drive | 2026-06-13 |
+| Full postmortem run (ingest→resolve→stream complete) | 22.3 s (was 60.3s) | generate_postmortem live, post-tuning | 2026-06-13 |
+| claude-fable-5 postmortem generation (concise, ~350w) | ~21 s | stream_anthropic_completion | 2026-06-13 |
 | **GLiNER2 severity-extraction inference (THE Pioneer badge number)** | **123–199 ms (server-reported)** | extract_severity() live, result.data.latency_ms | 2026-06-13 |
 | GLiNER2 severity-classification confidence (demo text) | 0.822 (P3) | extract_severity() live | 2026-06-13 |
 | **GLiNER2 verdict for THE demo incident** | **P3** (not the narrative's P1) | live, consistent across rich + minimal text | 2026-06-13 |

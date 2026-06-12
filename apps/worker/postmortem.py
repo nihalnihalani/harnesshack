@@ -54,12 +54,13 @@ logger = logging.getLogger("incidentsherpa.postmortem")
 # Postmortem drafting is the ONE frontier-LLM call in the pipeline
 # (CLAUDE.md: small models first; Claude for postmortem drafting only).
 ANTHROPIC_MODEL = "claude-fable-5"
-_MAX_OUTPUT_TOKENS = 16000
+# ~350-word postmortem is ~600 tokens; ceiling caps generation time (demo gate).
+_MAX_OUTPUT_TOKENS = 1200
 
 # Cap on a single replayed inter-chunk delay: pathological stalls in the
 # recorded stream (network hiccups) are not worth replaying verbatim. Within
 # the cap, pacing IS the measured model pacing.
-_MAX_REPLAY_DELAY_SECONDS = 1.0
+_MAX_REPLAY_DELAY_SECONDS = 0.10  # snappy streaming; total replay well under budget
 
 REQUIRED_SECTIONS = ("Timeline", "Root Cause", "Impact", "Action Items")
 
@@ -250,6 +251,10 @@ with their citation in square brackets, and only as past context — never as fa
 THIS incident.
 - Where the log is silent (e.g. a step was SKIPPED_NOT_CONFIGURED or DEGRADED), say so \
 honestly; do not fill gaps.
+
+BE CONCISE: a busy on-call engineer reads this at 2 AM. Aim for ~350 words total \
+across all four sections — tight bullets and a short timeline table, not prose. \
+Brevity is a feature, not a compromise of completeness.
 
 Write these four sections, in this order, as Markdown:
 {sections}
