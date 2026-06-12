@@ -1,74 +1,124 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+// IncidentSherpa war-room view (demo-scripts.md, IncidentSherpa Rev 2.1).
+// Every element on this page renders ONLY data received over SSE / API —
+// no hardcoded demo values; latency badges render measured numbers or
+// "awaiting measurement"; blocked/skipped/degraded states are styled loudly.
 
-// Raw typed event as streamed by GET /events (apps/api/main.py).
-type SherpaEvent = {
-  ts: string;
-  incident_id: string;
-  event_type: string;
-  payload: Record<string, unknown>;
-};
+import { useMemo } from "react";
+import { useEventStream } from "@/hooks/use-event-stream";
+import {
+  API_BASE,
+  asString,
+  causalEdges,
+  currentIncidentId,
+  deriveState,
+  type SherpaEvent,
+} from "@/lib/events";
+import { CausalGraph } from "@/components/causal-graph";
+import { FallbackPostmortem } from "@/components/fallback-postmortem";
+import { GuildStepper } from "@/components/guild-stepper";
+import { LatencyBadges } from "@/components/latency-badges";
+import { OwnerConfirm } from "@/components/owner-confirm";
+import { PostmortemPanel } from "@/components/postmortem-panel";
+import { Timeline } from "@/components/timeline";
 
-type ConnectionStatus = "connecting" | "connected" | "disconnected — retrying";
+function latestCausal(events: SherpaEvent[]): {
+  edges: ReturnType<typeof causalEdges>;
+  sql: string | null;
+} {
+  for (let i = events.length - 1; i >= 0; i--) {
+    if (events[i].event_type === "causal.chains_detected") {
+      return {
+        edges: causalEdges(events[i].payload),
+        sql: asString(events[i].payload.sql),
+      };
+    }
+  }
+  return { edges: [], sql: null };
+}
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
-
-/**
- * Phase 1 placeholder UI: a raw typed-event list wired to the real SSE
- * stream. The OpenUI timeline / causal graph / postmortem panel components
- * deepen in Phase 6 — the wiring below is what they will consume.
- */
-export default function Home() {
-  const [events, setEvents] = useState<SherpaEvent[]>([]);
-  const [status, setStatus] = useState<ConnectionStatus>("connecting");
-  const sourceRef = useRef<EventSource | null>(null);
-
-  useEffect(() => {
-    const source = new EventSource(`${API_BASE}/events`);
-    sourceRef.current = source;
-    source.onopen = () => setStatus("connected");
-    source.onerror = () => setStatus("disconnected — retrying");
-    source.onmessage = (message) => {
-      try {
-        const event = JSON.parse(message.data) as SherpaEvent;
-        setEvents((previous) => [...previous, event]);
-      } catch {
-        // Non-JSON frames (keepalives) are ignored.
+function affectedServicesOf(events: SherpaEvent[]): string[] {
+  for (let i = events.length - 1; i >= 0; i--) {
+    const event = events[i];
+    if (event.event_type === "extraction.completed") {
+      const raw = event.payload.affected_services;
+      if (Array.isArray(raw)) {
+        return raw.filter((item): item is string => typeof item === "string");
       }
-    };
-    return () => source.close();
-  }, []);
+    }
+  }
+  return [];
+}
+
+export default function Home() {
+  const { events: allEvents, status } = useEventStream(`${API_BASE}/events`);
+
+  const incidentId = currentIncidentId(allEvents);
+  const events = useMemo(
+    () =>
+      incidentId === null
+        ? allEvents
+        : allEvents.filter((event) => event.incident_id === incidentId),
+    [allEvents, incidentId],
+  );
+
+  const state = deriveState(events);
+  const causal = latestCausal(events);
 
   return (
-    <main className="mx-auto min-h-screen max-w-3xl px-6 py-10 font-mono">
-      <h1 className="text-2xl font-bold">IncidentSherpa — typed event stream</h1>
-      <p className="mt-1 text-sm opacity-70">
-        SSE: {API_BASE}/events — <span data-testid="status">{status}</span>
-      </p>
+    <main className="mx-auto flex min-h-screen max-w-7xl flex-col gap-4 px-4 py-4">
+      <header className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-800 bg-slate-950/60 px-4 py-3">
+        <div className="flex items-baseline gap-3">
+          <h1 className="text-lg font-bold tracking-tight text-slate-100">
+            IncidentSherpa
+          </h1>
+          <span className="text-sm text-slate-400">
+            {incidentId ? (
+              <>
+                incident <span className="font-mono text-slate-200">{incidentId}</span>
+              </>
+            ) : (
+              "no live incident"
+            )}
+          </span>
+        </div>
+        <GuildStepper state={state} />
+        <span
+          data-testid="status"
+          className={`rounded-full border px-3 py-1 text-xs ${
+            status.kind === "connected"
+              ? "border-emerald-600/60 text-emerald-300"
+              : "border-amber-600/60 text-amber-300"
+          }`}
+        >
+          {status.kind === "connected"
+            ? "● SSE connected"
+            : status.kind === "connecting"
+              ? "○ connecting…"
+              : `○ reconnecting (attempt ${status.attempt}, retry in ${Math.round(
+                  status.nextRetryMs / 1000,
+                )}s)`}
+        </span>
+      </header>
 
-      <ul className="mt-6 space-y-2" data-testid="event-list">
-        {events.length === 0 && (
-          <li className="text-sm opacity-60">
-            No events yet. POST an alert to {API_BASE}/trigger to see it land here.
-          </li>
-        )}
-        {events.map((event, index) => (
-          <li
-            key={`${event.incident_id}-${event.ts}-${index}`}
-            className="rounded border border-neutral-700 p-3 text-sm"
-          >
-            <div className="flex justify-between gap-4">
-              <span className="font-semibold">{event.event_type}</span>
-              <span className="opacity-70">{event.ts}</span>
-            </div>
-            <div className="opacity-80">incident: {event.incident_id}</div>
-            <pre className="mt-1 overflow-x-auto text-xs opacity-70">
-              {JSON.stringify(event.payload, null, 2)}
-            </pre>
-          </li>
-        ))}
-      </ul>
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-5">
+        <div className="min-h-[24rem] lg:col-span-2">
+          <Timeline events={events} />
+        </div>
+        <div className="flex min-h-0 flex-col gap-4 lg:col-span-3">
+          <CausalGraph
+            edges={causal.edges}
+            sql={causal.sql}
+            affectedServices={affectedServicesOf(events)}
+          />
+          <LatencyBadges events={events} />
+          <OwnerConfirm incidentId={incidentId} events={events} />
+          <PostmortemPanel incidentId={incidentId} state={state} events={events} />
+        </div>
+      </div>
+
+      <FallbackPostmortem />
     </main>
   );
 }

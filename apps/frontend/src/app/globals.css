@@ -1,1 +1,66 @@
 @import "tailwindcss";
+
+/* Dark ops-tool theme — designed to read at 125% presenter zoom. */
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  background:
+    radial-gradient(1200px 500px at 80% -10%, rgba(56, 130, 246, 0.08), transparent),
+    #070a12;
+  color: #d6deeb;
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
+}
+
+/* Animated causal edge: the dash pattern flows cause -> effect. */
+.causal-edge {
+  animation: causal-dash 1.2s linear infinite;
+}
+
+@keyframes causal-dash {
+  to {
+    stroke-dashoffset: -24;
+  }
+}
+
+/* Effect node pulses red (demo beat 0:42: "payments node pulses red"). */
+.causal-pulse {
+  animation: causal-pulse 1.6s ease-in-out infinite;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+
+@keyframes causal-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* Streaming caret at the live edge of the postmortem. */
+.streaming-caret {
+  animation: caret-blink 0.9s steps(1) infinite;
+  color: #34d399;
+}
+
+@keyframes caret-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+/* Markdown stream readability inside the postmortem panel. */
+.postmortem-stream {
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
