@@ -77,13 +77,13 @@ export function CausalGraph({ edges, sql, affectedServices }: Props) {
           <button
             type="button"
             onClick={() => setShowSql((value) => !value)}
-            className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-bold font-mono transition-all duration-200 ${
+            className={`inline-flex items-center gap-2 rounded-md border px-4 py-2 text-sm font-bold font-mono transition-all duration-200 ${
               showSql
                 ? "border-amber-500/40 bg-amber-500/10 text-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.1)]"
-                : "border-slate-800 bg-slate-900/40 text-slate-400 hover:border-slate-700 hover:text-slate-200"
+                : "border-2 border-amber-500/60 bg-amber-500/10 text-amber-200 hover:bg-amber-500/25 demo-action-glow-amber"
             }`}
           >
-            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
               <path strokeLinecap="round" strokeLinejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
             </svg>
             {showSql ? "HIDE SQL" : "SHOW SQL"}
@@ -249,6 +249,19 @@ export function CausalGraph({ edges, sql, affectedServices }: Props) {
               );
             })}
           </svg>
+
+          {sql && !showSql && (
+            <button
+              type="button"
+              onClick={() => setShowSql(true)}
+              className="demo-cue mx-auto mt-1 flex items-center gap-1.5 rounded-full border border-amber-500/40 bg-amber-500/5 px-3 py-1 text-[11px] font-black font-mono uppercase tracking-widest text-amber-300"
+            >
+              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
+              </svg>
+              Tap a node to see the live ClickHouse query
+            </button>
+          )}
 
           {showSql && sql && (
             <div

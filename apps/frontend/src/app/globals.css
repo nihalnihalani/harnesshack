@@ -118,10 +118,59 @@ body {
   }
 }
 
-/* Markdown stream readability inside the postmortem panel. */
+/* Markdown stream readability inside the postmortem panel. Bumped for
+   on-camera legibility (demo wow moment). */
 .postmortem-stream {
-  font-size: 0.975rem;
-  line-height: 1.65;
+  font-size: 1.075rem;
+  line-height: 1.7;
+}
+
+/* ── Demo presenter affordances ──────────────────────────────────────────
+   The handful of elements the presenter actually CLICKS during the 60s demo
+   (Resolve, Show SQL, Confirm owner) get a big pulsing glow so they're
+   impossible to miss on a recording. Reads as a normal call-to-action, not a
+   gimmick — the glow only animates while the action is live. */
+.demo-action-glow {
+  animation: demo-action-glow 1.5s ease-in-out infinite;
+}
+@keyframes demo-action-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.45), 0 0 20px rgba(16, 185, 129, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 0 7px rgba(16, 185, 129, 0), 0 0 30px rgba(16, 185, 129, 0.5);
+  }
+}
+.demo-action-glow-amber {
+  animation: demo-action-glow-amber 1.5s ease-in-out infinite;
+}
+@keyframes demo-action-glow-amber {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.45), 0 0 16px rgba(245, 158, 11, 0.25);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(245, 158, 11, 0), 0 0 26px rgba(245, 158, 11, 0.45);
+  }
+}
+.demo-action-glow-sky {
+  animation: demo-action-glow-sky 1.5s ease-in-out infinite;
+}
+@keyframes demo-action-glow-sky {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(14, 165, 233, 0.45), 0 0 16px rgba(14, 165, 233, 0.25);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(14, 165, 233, 0), 0 0 26px rgba(14, 165, 233, 0.45);
+  }
+}
+
+/* Small "click here" cue chip next to a live demo action. */
+.demo-cue {
+  animation: demo-cue-bob 1.1s ease-in-out infinite;
+}
+@keyframes demo-cue-bob {
+  0%, 100% { transform: translateX(0); opacity: 0.9; }
+  50% { transform: translateX(4px); opacity: 1; }
 }
 
 /* Custom terminal scanline overlay */

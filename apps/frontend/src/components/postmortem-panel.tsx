@@ -126,7 +126,17 @@ export function PostmortemPanel({ incidentId, state, events }: Props) {
           </span>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          {/* Demo cue: only while the incident is actually resolvable. */}
+          {isMitigating && !requested && (
+            <span className="demo-cue hidden sm:inline-flex items-center gap-1 text-[11px] font-black font-mono uppercase tracking-widest text-emerald-400">
+              Click to resolve
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+              </svg>
+            </span>
+          )}
+
           {derived.text.length > 0 && (
             <button
               type="button"
@@ -148,31 +158,31 @@ export function PostmortemPanel({ incidentId, state, events }: Props) {
             type="button"
             onClick={resolve}
             disabled={!incidentId || state !== "MITIGATING" || requested}
-            className={`inline-flex items-center gap-1.5 rounded-lg border px-4 py-1.5 text-xs font-bold font-mono uppercase tracking-wider transition-all duration-300 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40 ${
+            className={`inline-flex items-center gap-2 rounded-lg border px-6 py-3 text-sm sm:text-base font-black font-mono uppercase tracking-wider transition-all duration-300 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40 ${
               state === "RESOLVED"
                 ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
                 : requested
                   ? "border-cyan-500/30 bg-cyan-500/10 text-cyan-400"
                   : isMitigating
-                    ? "border-emerald-500 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/35 animate-pulse shadow-[0_0_12px_rgba(16,185,129,0.15)] hover:shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:-translate-y-0.5"
+                    ? "border-2 border-emerald-400 bg-emerald-500/20 text-emerald-100 hover:bg-emerald-500/40 demo-action-glow hover:-translate-y-0.5"
                     : "border-slate-800 bg-slate-900/30 text-slate-500"
             }`}
           >
             {state === "RESOLVED" ? (
               <>
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3">
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                 </svg>
                 RESOLVED
               </>
             ) : requested ? (
               <>
-                <span className="h-3 w-3 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+                <span className="h-4 w-4 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
                 RESOLVING…
               </>
             ) : (
               <>
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                 </svg>
                 RESOLVE INCIDENT

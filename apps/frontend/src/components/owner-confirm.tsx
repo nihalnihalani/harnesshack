@@ -123,16 +123,16 @@ export function OwnerConfirm({ incidentId, events }: Props) {
                 type="button"
                 onClick={confirm}
                 disabled={posting || !incidentId}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-sky-500 bg-sky-500/15 px-4.5 py-2 text-xs font-extrabold font-mono uppercase tracking-wider text-sky-300 hover:bg-sky-500/35 transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_12px_rgba(14,165,233,0.1)] hover:shadow-[0_0_16px_rgba(14,165,233,0.2)] hover:-translate-y-0.5"
+                className={`inline-flex items-center gap-2 rounded-lg border-2 border-sky-400 bg-sky-500/20 px-5 py-2.5 text-sm font-extrabold font-mono uppercase tracking-wider text-sky-100 hover:bg-sky-500/40 transition-all duration-200 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed hover:-translate-y-0.5 ${posting ? "" : "demo-action-glow-sky"}`}
               >
                 {posting ? (
                   <>
-                    <span className="h-3 w-3 border-2 border-sky-400 border-t-transparent rounded-full animate-spin" />
+                    <span className="h-4 w-4 border-2 border-sky-400 border-t-transparent rounded-full animate-spin" />
                     CONFIRMING…
                   </>
                 ) : (
                   <>
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                     </svg>
                     CONFIRM APPOINTMENT
