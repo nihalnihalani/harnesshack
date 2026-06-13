@@ -238,8 +238,9 @@ def main() -> int:
             print(f"  - {line}")
     print(
         "\nRemaining manual steps: trigger the demo incident, pin the tabs"
-        " (timeline / Langfuse / Slack #incidents / Jira PLAT / Render),"
-        " arm the F2 fallback."
+        " (timeline / Langfuse / Slack #incidents / Jira PLAT),"
+        " arm the F2 fallback. (Severity reads what GLiNER2 returns this run —"
+        " P2 or P3 — say the on-screen badge, never a memorized number.)"
     )
     return 0 if all_ok else 1
 
